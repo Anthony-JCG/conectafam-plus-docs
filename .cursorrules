@@ -1,0 +1,24 @@
+# RULES FOR GIT COMMIT MESSAGES
+When generating git commit messages via the source control panel, strictly adhere to the Conventional Commits specification in English.
+
+Format: <type>(<scope>): <short description in lowercase, present tense, imperative mood>
+
+Rules:
+1. Length: The first line must not exceed 60 characters.
+2. Scope: Identify the specific module changed and place it inside parentheses (e.g., landing, auth, editor, github, config).
+3. No Emojis: Do not include emojis in the commit message.
+
+Allowed Types (Select based strictly on the file types in the diff):
+- feat: Introduced a new feature, business logic, or user-facing visual component.
+- fix: Patched a bug, resolved an error, or fixed a UI defect/regression.
+- refactor: Rewrote or restructured production code without changing its external behavior or adding features.
+- perf: Optimized code to improve execution speed, SQL query count, or memory consumption.
+- chore: Updated dependencies, configuration files, internal tooling, or file paths (no production code changes).
+- docs: Modified documentation files only (e.g., README.md, inline docstrings).
+- test: Added, updated, or refactored test suites (e.g., pytest, unittest, django tests) without modifying production code.
+- ci: Modified CI/CD workflow files, automation scripts, or pipeline triggers (e.g., GitHub Actions .yml).
+- style: Code formatting changes only (whitespaces, indentation, linter rules) that do not affect runtime behavior or UI appearance.
+
+Breaking Changes Rule:
+If the diff contains backwards-incompatible changes (e.g., changing database schema, removing critical API endpoints), append an exclamation mark `!` before the colon.
+Format example: feat(auth)!: replace custom token auth with jwt middleware
