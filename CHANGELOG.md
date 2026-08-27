@@ -1,5 +1,25 @@
 # Changelog
 
+## [4.0.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.0.0...v4.0.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **config:** trust x-forwarded-proto behind reverse proxy ([#265](https://github.com/Anthony-JCG/conectafam-plus/issues/265)) ([173c909](https://github.com/Anthony-JCG/conectafam-plus/commit/173c909d418333f75b8eab08e20f3f87db04564b))
+
+
+### Code Refactoring
+
+* **ci:** use paths-changed in deploy workflow ([873f0ff](https://github.com/Anthony-JCG/conectafam-plus/commit/873f0ff811aa413b5b9976a370efc911ed54a4b9))
+
+
+### Documentation
+
+* add Spanish documentation siblings (*.es.md) ([756c48e](https://github.com/Anthony-JCG/conectafam-plus/commit/756c48e41432b1ed406060ea4856e36b0925b776))
+* add spanish siblings for project documentation ([55d2327](https://github.com/Anthony-JCG/conectafam-plus/commit/55d23277af27e99c772e7c5024b7ff1928908763))
+* remove known gaps section from user levels cache ([d8f3cad](https://github.com/Anthony-JCG/conectafam-plus/commit/d8f3cadf86ef1f0b7a4cdfb22881ccffdc460394))
+* use Conectafam Plus as product brand name ([0d89005](https://github.com/Anthony-JCG/conectafam-plus/commit/0d89005ffc716e0b44b71b52040ee799740ff8fd))
+
 ## [4.0.0](https://github.com/Anthony-JCG/Platform/compare/v3.2.0...v4.0.0) (2026-08-26)
 
 
