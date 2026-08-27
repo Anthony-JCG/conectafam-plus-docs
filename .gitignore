@@ -1,1 +1,7 @@
-.idea
+.idea/
+.venv/
+__pycache__/
+*.py[cod]
+site/
+site_docs/
+.cache/
