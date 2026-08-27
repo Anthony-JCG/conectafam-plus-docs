@@ -266,6 +266,15 @@ El middleware propio corre en este orden, seis de `users` y uno de `user_levels`
 Los mensajes de commit siguen **Conventional Commits** (`<type>(<scope>): <description>`, primera
 línea ≤ 60 caracteres). Los releases y [`CHANGELOG.md`](CHANGELOG.md) los genera release-please.
 
+### Espejo público de documentación
+
+La documentación vive en este repositorio y se replica en
+[`conectafam-plus-docs`](https://github.com/Anthony-JCG/conectafam-plus-docs) cuando un push a
+`main` incluye cambios en `.md` versionados (excluyendo `.github/` y `.cursor/`). GitHub Actions
+en ese repositorio construye el sitio MkDocs.
+
+Workflow: [`.github/workflows/sync-docs.yml`](.github/workflows/sync-docs.yml).
+
 ---
 
 
