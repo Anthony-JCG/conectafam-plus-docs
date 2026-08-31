@@ -106,7 +106,7 @@ My Team, `modal-new-user.html`, `modal-delete-invitation.html`, `modal-resend-in
 | `save-favorite-incentive/` | `save_favorite_incentive` | Toggle favourite (JSON) |
 | `create-incentive-task/` · `get-incentive-month-tasks/` | `create_incentive_task`, `get_incentive_month_tasks` | Monthly incentive tasks (JSON) |
 | `copy/<id>/` | `copy_incentive` | Copies a visible incentive into the user's account |
-| `register-push-subscription/` | `register_push_subscription` | Stores the FCM token (JSON). `@login_required` + `@require_POST`; **CSRF protection is active** |
+| `register-push-subscription/` | `register_push_subscription` | Stores the FCM token (JSON). Returns 401 JSON if anonymous; `@require_POST`; **CSRF protection is active** |
 | `set-notifications-activated/` | `set_notifications_activated` | Toggles notification opt-in |
 | `notifications/` · `notification-redirect/` | `all_notifications`, `notification_redirect` | Notification centre and mark-read redirect |
 | `save-route-step/` · `delete-route-step/` | `save_route_step`, `delete_route_step` | Leader route step CRUD (JSON or redirect depending on the AJAX header) |

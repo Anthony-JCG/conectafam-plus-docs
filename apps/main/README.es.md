@@ -110,7 +110,7 @@ en Mi Equipo, `modal-new-user.html`, `modal-delete-invitation.html`,
 | `save-favorite-incentive/` | `save_favorite_incentive` | Alternar favorito (JSON) |
 | `create-incentive-task/` · `get-incentive-month-tasks/` | `create_incentive_task`, `get_incentive_month_tasks` | Tareas mensuales de incentivo (JSON) |
 | `copy/<id>/` | `copy_incentive` | Copia un incentivo visible a la cuenta del usuario |
-| `register-push-subscription/` | `register_push_subscription` | Guarda el token FCM (JSON). `@login_required` + `@require_POST`; **la protección CSRF está activa** |
+| `register-push-subscription/` | `register_push_subscription` | Guarda el token FCM (JSON). Devuelve 401 JSON si el usuario no está autenticado; `@require_POST`; **la protección CSRF está activa** |
 | `set-notifications-activated/` | `set_notifications_activated` | Alterna el opt-in de notificaciones |
 | `notifications/` · `notification-redirect/` | `all_notifications`, `notification_redirect` | Centro de notificaciones y redirección de marcado como leído |
 | `save-route-step/` · `delete-route-step/` | `save_route_step`, `delete_route_step` | CRUD de pasos de ruta del líder (JSON o redirección según la cabecera AJAX) |

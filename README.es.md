@@ -19,6 +19,7 @@ la infraestructura está en [`docs/`](docs/README.es.md).
 | Caché / broker     | Redis                                                                                                         |
 | Tareas asíncronas  | Celery worker + Celery beat                                                                                   |
 | Proxy inverso      | Nginx (TLS, estáticos, media HLS)                                                                             |
+| Edge / CDN         | Bunny.net delante del Nginx de origen en producción. No se usa el proxy de Cloudflare                         |
 | Frontend           | Plantillas en servidor + JS vanilla, Bootstrap, jQuery. **HTMX para envío de formularios en apps seleccionadas** |
 | Almacenamiento     | Cloudflare R2 (compatible S3) en producción                                                                   |
 | Observabilidad     | Sentry                                                                                                        |
@@ -191,9 +192,16 @@ refused». `SENTRY_ENVIRONMENT` toma por defecto `development`, `test` o `produc
 El código de aplicación reporta a Sentry de forma explícita en un solo sitio:
 `core.utils.fcm_observability`, que reenvía anomalías de entrega FCM.
 
-### Cloudflare
+### Bunny.net
 
-Cloudflare aporta la CDN y el almacenamiento de objetos **R2** para media.
+En producción, la terminación TLS y la caché están en Bunny.net, delante del Nginx de origen. No se
+usa el proxy de Cloudflare para el sitio: sus rangos anycast no son alcanzables desde algunas redes
+de operadores del público. Este repositorio no configura Bunny; el origen sigue hablando HTTP con
+Nginx, como documenta [`docs/docker.es.md`](docs/docker.es.md).
+
+### Cloudflare R2
+
+Almacenamiento de objetos para media en producción — no es la CDN del sitio.
 `apps/core/storage_config.py` condiciona la activación: R2 solo se usa en producción, con
 `TEST_ENVIRONMENT` desactivado y las cuatro credenciales R2 presentes. Entonces
 `STORAGES["default"]` pasa a `S3Boto3Storage` con `location="media"` y `querystring_auth=False`, y

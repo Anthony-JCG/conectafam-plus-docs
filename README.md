@@ -19,6 +19,7 @@ This file is the single entry point to the repository. Each app documents itself
 | Cache / broker     | Redis                                                                                                    |
 | Async tasks        | Celery worker + Celery beat                                                                              |
 | Reverse proxy      | Nginx (TLS, static files, HLS media)                                                                     |
+| Edge / CDN         | Bunny.net in front of origin Nginx in production. Cloudflare's site proxy is not used                    |
 | Frontend           | Server-rendered templates + vanilla JS, Bootstrap, jQuery. **HTMX for form submission in selected apps** |
 | Media storage      | Cloudflare R2 (S3-compatible) in production                                                              |
 | Observability      | Sentry                                                                                                   |
@@ -190,9 +191,16 @@ Redis, and logging (`WARNING` as breadcrumbs, `ERROR` as events).
 Application code reports to Sentry explicitly in one place: `core.utils.fcm_observability`, which
 forwards FCM delivery anomalies.
 
-### Cloudflare
+### Bunny.net
 
-Cloudflare provides the CDN and **R2** object storage for media. `apps/core/storage_config.py` gates
+Production TLS termination and caching sit on Bunny.net in front of origin Nginx. Cloudflare's
+proxy is not used for the site: its anycast ranges are unreachable from some operator networks in
+the user base. There is no Bunny configuration in this repository; the origin still speaks HTTP to
+Nginx as documented in [`docs/docker.md`](docs/docker.md).
+
+### Cloudflare R2
+
+Object storage for media in production — not the site CDN. `apps/core/storage_config.py` gates
 activation: R2 is used only when the environment is production, `TEST_ENVIRONMENT` is off, and all
 four R2 credentials are present. `STORAGES["default"]` then becomes `S3Boto3Storage` with
 `location="media"` and `querystring_auth=False`, and `MEDIA_URL` points at
