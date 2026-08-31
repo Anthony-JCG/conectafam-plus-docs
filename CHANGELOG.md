@@ -1,5 +1,33 @@
 # Changelog
 
+## [4.1.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.0.1...v4.1.0) (2026-08-31)
+
+
+### Features
+
+* **theme:** restore subtle scrollbars across the app ([#266](https://github.com/Anthony-JCG/conectafam-plus/issues/266)) ([1b8e644](https://github.com/Anthony-JCG/conectafam-plus/commit/1b8e644a4f41144862c1f50b787fca142d761dbf))
+
+
+### Bug Fixes
+
+* **boards:** handle invalid urls in link previews ([a3409e1](https://github.com/Anthony-JCG/conectafam-plus/commit/a3409e18e0cda5379d15d20a0533d0625a872e22))
+* **boards:** skip mosaic thumbs for missing s3 files ([2c9b185](https://github.com/Anthony-JCG/conectafam-plus/commit/2c9b185c563232dc0da89ecdcc8f5293a618eb7b))
+* **landing:** export initBlockPreviewsInRoot ([935157f](https://github.com/Anthony-JCG/conectafam-plus/commit/935157fef8146c8cfcefcd5c47e4fdf6511a666e))
+* **pwa:** skip anonymous fcm register and retry network ([09f03ce](https://github.com/Anthony-JCG/conectafam-plus/commit/09f03ce68ea30603eb9cff07ffdd41f3448713e2))
+* resolve production sentry issues ([1583ff3](https://github.com/Anthony-JCG/conectafam-plus/commit/1583ff3c323acf400d4596c159e5383dcc51a3e9))
+* **ui:** guard bootstrap tooltip stub and offcanvas ([c0579cd](https://github.com/Anthony-JCG/conectafam-plus/commit/c0579cd9bd85d6406ada82760fa1e0372cd20a75))
+* **ui:** ignore cloudflare html 502 in client sentry ([fc90736](https://github.com/Anthony-JCG/conectafam-plus/commit/fc907367a186f63715e7da2966e3d55e70e68f55))
+
+
+### Code Refactoring
+
+* **landing:** remove unused getBlockBackgroundColor function ([ebfe7b2](https://github.com/Anthony-JCG/conectafam-plus/commit/ebfe7b2f1676c7c2976a503093a1728687a18391))
+
+
+### Documentation
+
+* **readme:** separate bunny edge from cloudflare r2 ([7469f7b](https://github.com/Anthony-JCG/conectafam-plus/commit/7469f7b5308352079456f945e0c2fa835a571ab7))
+
 ## [4.0.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.0.0...v4.0.1) (2026-08-27)
 
 
