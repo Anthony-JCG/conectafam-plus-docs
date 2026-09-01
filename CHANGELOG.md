@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.3.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.2.0...v4.3.0) (2026-09-01)
+
+
+### Features
+
+* **keyboard-api:** sync media size estimate endpoint ([45673d6](https://github.com/Anthony-JCG/conectafam-plus/commit/45673d6aa0179083f37205b41bd1ec1b165d6125))
+
 ## [4.2.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.1.0...v4.2.0) (2026-09-01)
 
 
