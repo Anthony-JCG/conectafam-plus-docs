@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.2.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.1.0...v4.2.0) (2026-09-01)
+
+
+### Features
+
+* **keyboard-api:** expose file and preview sizes ([#269](https://github.com/Anthony-JCG/conectafam-plus/issues/269)) ([42689e3](https://github.com/Anthony-JCG/conectafam-plus/commit/42689e37a1f305a5346e08118231c81a8186ab63))
+
 ## [4.1.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.0.1...v4.1.0) (2026-08-31)
 
 
