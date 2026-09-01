@@ -346,6 +346,7 @@ Authorization: Token <token>
   "title": "Marketing Resources",
   "description": "Links and files for the marketing team.",
   "cover_image": "https://conectafam-plus.com/media/boards/covers/cover.jpg",
+  "cover_image_size": 24576,
   "url": "https://conectafam-plus.com/boards/1/",
   "order": 0,
   "updated_at": "2026-06-25T22:00:00.000000+00:00",
@@ -376,6 +377,7 @@ reconstruye el árbol con `parent_id` en carpetas y `folder_id` en ítems.
   "title": "Marketing Resources",
   "description": "Links and files for the marketing team.",
   "cover_image": "https://conectafam-plus.com/media/boards/covers/cover.jpg",
+  "cover_image_size": 24576,
   "url": "https://conectafam-plus.com/boards/1/",
   "order": 0,
   "updated_at": "2026-06-25T22:00:00.000000+00:00",
@@ -439,9 +441,11 @@ reconstruye el árbol con `parent_id` en carpetas y `folder_id` en ítems.
   "url": "",
   "file_url": "https://conectafam-plus.com/media/boards/files/recording",
   "file_name": "recording",
+  "file_size": 1048576,
   "file_mime_type": "audio/mpeg",
   "share_url": "https://conectafam-plus.com/media/boards/files/recording",
   "preview_url": "",
+  "preview_size": 0,
   "youtube_video_id": "",
   "landing_page_id": null,
   "order": 1
@@ -460,9 +464,11 @@ reconstruye el árbol con `parent_id` en carpetas y `folder_id` en ítems.
 | `url` | `string` | URL externa para ítems `link` y `youtube` |
 | `file_url` | `string` | URL absoluta del archivo multimedia |
 | `file_name` | `string` | Nombre de archivo tal como se guarda en el servidor (p. ej. `"recording.m4a"`). Úsalo como nombre sugerido al descargar o compartir. Vacío si el ítem no tiene archivo. |
+| `file_size` | `int` | Tamaño del archivo multimedia en bytes. `0` cuando el ítem no tiene archivo. |
 | `file_mime_type` | `string` | Tipo MIME inferido de la extensión del nombre, con fallbacks por tipo para archivos guardados sin extensión (p. ej. `"audio/mpeg"` para `voice`, `"video/mp4"` para `video`). Vacío si el ítem no tiene archivo. |
 | `share_url` | `string` | Mejor URL para pegar o compartir este ítem externamente |
 | `preview_url` | `string` | URL de miniatura o imagen de previsualización |
+| `preview_size` | `int` | Tamaño en bytes de la miniatura `mosaic_preview` generada en el servidor. `0` cuando no existe archivo de preview. |
 | `youtube_video_id` | `string` | ID de vídeo de YouTube extraído, o `""` |
 | `landing_page_id` | `int \| null` | ID de la landing page vinculada, o `null` |
 | `order` | `int` | Posición de orden dentro de su padre |
@@ -472,13 +478,13 @@ reconstruye el árbol con `parent_id` en carpetas y `folder_id` en ítems.
 | `item_type` | Descripción | Campos poblados |
 |---|---|---|
 | `text` | Fragmento de texto plano | `text_content` |
-| `image` | Imagen subida | `file_url`, `file_name`, `file_mime_type`, `preview_url` |
+| `image` | Imagen subida | `file_url`, `file_name`, `file_size`, `file_mime_type`, `preview_url`, `preview_size` |
 | `link` | Enlace web externo | `url`, `share_url` |
-| `video` | Vídeo subido | `file_url`, `file_name`, `file_mime_type` |
-| `voice` | Grabación de voz | `file_url`, `file_name`, `file_mime_type` |
-| `pdf` | Documento PDF | `file_url`, `file_name`, `file_mime_type` |
+| `video` | Vídeo subido | `file_url`, `file_name`, `file_size`, `file_mime_type` |
+| `voice` | Grabación de voz | `file_url`, `file_name`, `file_size`, `file_mime_type` |
+| `pdf` | Documento PDF | `file_url`, `file_name`, `file_size`, `file_mime_type`, `preview_url`, `preview_size` |
 | `youtube` | Vídeo de YouTube | `url`, `youtube_video_id`, `preview_url` |
-| `page` | Landing page | `landing_page_id`, `share_url`, `preview_url` |
+| `page` | Landing page | `landing_page_id`, `share_url`, `preview_url`, `preview_size` |
 
 #### Notas sobre `preview_url`
 
@@ -494,6 +500,20 @@ reconstruye el árbol con `parent_id` en carpetas y `folder_id` en ítems.
 
 > Las miniaturas `mosaic_preview` se generan en el servidor (PIL para imágenes, PyMuPDF para PDFs)
 > en el momento de la subida. No hace falta redimensionar ni renderizar PDF en el cliente.
+
+#### Campos de tamaño de archivo
+
+Todos los valores de tamaño son enteros en **bytes**:
+
+| Campo | Ámbito | `0` significa |
+|---|---|---|
+| `cover_image_size` | Board | Sin imagen de portada configurada |
+| `file_size` | Ítem | El ítem no tiene archivo multimedia subido |
+| `preview_size` | Ítem | No existe miniatura `mosaic_preview` en storage |
+
+Úsalos para estimar requisitos de descarga/almacenamiento offline antes de obtener los medios. Los
+tamaños se resuelven desde storage en el momento de la sync; registros huérfanos cuyo archivo ya no
+existe devuelven `0`.
 
 ### SyncResponse
 

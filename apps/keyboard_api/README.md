@@ -320,6 +320,7 @@ Authorization: Token <token>
   "title": "Marketing Resources",
   "description": "Links and files for the marketing team.",
   "cover_image": "https://conectafam-plus.com/media/boards/covers/cover.jpg",
+  "cover_image_size": 24576,
   "url": "https://conectafam-plus.com/boards/1/",
   "order": 0,
   "updated_at": "2026-06-25T22:00:00.000000+00:00",
@@ -348,6 +349,7 @@ Authorization: Token <token>
   "title": "Marketing Resources",
   "description": "Links and files for the marketing team.",
   "cover_image": "https://conectafam-plus.com/media/boards/covers/cover.jpg",
+  "cover_image_size": 24576,
   "url": "https://conectafam-plus.com/boards/1/",
   "order": 0,
   "updated_at": "2026-06-25T22:00:00.000000+00:00",
@@ -411,9 +413,11 @@ Authorization: Token <token>
   "url": "",
   "file_url": "https://conectafam-plus.com/media/boards/files/recording",
   "file_name": "recording",
+  "file_size": 1048576,
   "file_mime_type": "audio/mpeg",
   "share_url": "https://conectafam-plus.com/media/boards/files/recording",
   "preview_url": "",
+  "preview_size": 0,
   "youtube_video_id": "",
   "landing_page_id": null,
   "order": 1
@@ -432,9 +436,11 @@ Authorization: Token <token>
 | `url` | `string` | External URL for `link` and `youtube` items |
 | `file_url` | `string` | Absolute URL to the media file |
 | `file_name` | `string` | Filename as stored on the server (e.g. `"recording.m4a"`). Use as suggested filename when downloading or sharing. Empty if the item has no file. |
+| `file_size` | `int` | Size of the media file in bytes. `0` when the item has no file. |
 | `file_mime_type` | `string` | MIME type inferred from the filename extension, with per-type fallbacks for files stored without an extension (e.g. `"audio/mpeg"` for `voice`, `"video/mp4"` for `video`). Empty if the item has no file. |
 | `share_url` | `string` | Best URL to paste or share this item externally |
 | `preview_url` | `string` | Thumbnail or preview image URL |
+| `preview_size` | `int` | Size of the server-generated `mosaic_preview` thumbnail in bytes. `0` when no preview file exists. |
 | `youtube_video_id` | `string` | Extracted YouTube video ID, or `""` |
 | `landing_page_id` | `int \| null` | Linked landing page ID, or `null` |
 | `order` | `int` | Sort position within its parent |
@@ -444,13 +450,13 @@ Authorization: Token <token>
 | `item_type` | Description | Populated fields |
 |---|---|---|
 | `text` | Plain text snippet | `text_content` |
-| `image` | Uploaded image | `file_url`, `file_name`, `file_mime_type`, `preview_url` |
+| `image` | Uploaded image | `file_url`, `file_name`, `file_size`, `file_mime_type`, `preview_url`, `preview_size` |
 | `link` | External web link | `url`, `share_url` |
-| `video` | Uploaded video | `file_url`, `file_name`, `file_mime_type` |
-| `voice` | Voice recording | `file_url`, `file_name`, `file_mime_type` |
-| `pdf` | PDF document | `file_url`, `file_name`, `file_mime_type` |
+| `video` | Uploaded video | `file_url`, `file_name`, `file_size`, `file_mime_type` |
+| `voice` | Voice recording | `file_url`, `file_name`, `file_size`, `file_mime_type` |
+| `pdf` | PDF document | `file_url`, `file_name`, `file_size`, `file_mime_type`, `preview_url`, `preview_size` |
 | `youtube` | YouTube video | `url`, `youtube_video_id`, `preview_url` |
-| `page` | Landing page | `landing_page_id`, `share_url`, `preview_url` |
+| `page` | Landing page | `landing_page_id`, `share_url`, `preview_url`, `preview_size` |
 
 #### Preview URL notes
 
@@ -462,6 +468,18 @@ Authorization: Token <token>
 - All other types: empty string
 
 > The `mosaic_preview` thumbnails are generated server-side (PIL for images, PyMuPDF for PDFs) at upload time. No client-side resizing or PDF rendering is required.
+
+#### File size fields
+
+All size values are integers in **bytes**:
+
+| Field | Scope | `0` means |
+|---|---|---|
+| `cover_image_size` | Board | No cover image configured |
+| `file_size` | Item | Item has no uploaded media file |
+| `preview_size` | Item | No `mosaic_preview` thumbnail on storage |
+
+Use these values to estimate download/storage requirements before fetching media offline. Sizes are resolved from storage at sync time; orphaned DB records whose file no longer exists return `0`.
 
 ### SyncResponse
 
