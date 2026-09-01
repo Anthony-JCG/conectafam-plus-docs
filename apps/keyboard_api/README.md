@@ -58,18 +58,21 @@ The chosen architecture separates concerns cleanly:
 2. POST /api/keyboard/auth/fcm-token/
    → register FCM device token
 
-3. GET  /api/keyboard/sync/            (no ?since — full sync)
+3. GET  /api/keyboard/sync/estimate/
+   → show download-size prompt (Apple 4.2.3(ii)) before fetching media
+
+4. GET  /api/keyboard/sync/            (no ?since — full sync)
    → is_full_sync: true
    → store all boards + store synced_at value locally
    → keyboard extension now has complete offline data
 
 ── Normal use ───────────────────────────────────────────────────────────
 
-4. [Web] User edits a board (any folder, item, or board metadata)
+5. [Web] User edits a board (any folder, item, or board metadata)
    → Django signal touches Board.updated_at
    → Celery task sends silent FCM push to affected devices
 
-5. Main app receives FCM push  (data.event == "boards_changed")
+6. Main app receives FCM push  (data.event == "boards_changed")
    → GET /api/keyboard/sync/?since=<last synced_at>  (delta sync)
    → is_full_sync: false
    → upsert changed boards into local store
@@ -258,7 +261,60 @@ For a typical edit (one board changed), queries 5–6 return a single row each. 
 
 ---
 
-### 5. List Boards (progressive navigation)
+### 5. Offline media size estimate
+
+**`GET /api/keyboard/sync/estimate/`**
+
+Returns only the total byte size and file count for a full offline media cache of every board the user can access. Used by the Flutter host app to show a download-size prompt **before** calling `GET /sync/` and downloading media (Apple App Store guideline 4.2.3(ii)).
+
+Does **not** return boards, items, URLs, or media. The shape of `GET /sync/` is unchanged.
+
+Call this after login (and before the first full sync / media download). The keyboard extension never calls this endpoint.
+
+#### Request headers
+
+```
+Authorization: Token <token>
+```
+
+No query parameters.
+
+#### Responses
+
+| Status | Description | Body |
+|---|---|---|
+| `200 OK` | Size totals | `{"bytes": int, "file_count": int}` |
+| `401 Unauthorized` | Missing or invalid token | `{"error": "..."}` |
+| `500 Internal Server Error` | Unexpected error | `{"error": "Internal server error."}` |
+
+#### Response body
+
+```json
+{
+  "bytes": 1684488192,
+  "file_count": 1234
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `bytes` | `int` | Sum of every non-zero `cover_image_size` (board) + `file_size` (item) + `preview_size` (item) the user would download for a full offline cache. Same rules as `/sync/`: `0` means no file / no preview / no cover and is skipped. |
+| `file_count` | `int` | How many of those size fields were non-zero (each non-zero field counts as one file). |
+
+Both fields are always present JSON integers (never null, never omitted). Empty catalog:
+
+```json
+{"bytes": 0, "file_count": 0}
+```
+
+Access resolution matches `GET /sync/` (owned + library + collaborator + public). Sizes are
+persisted on `Board.cover_image_size`, `BoardItem.file_size`, and `BoardItem.preview_size` when
+media is uploaded or changed, so this endpoint is a SQL `SUM` / `COUNT` — no per-file storage
+HEAD and no media download. Payload is tiny (Gzip optional).
+
+---
+
+### 6. List Boards (progressive navigation)
 
 **`GET /api/keyboard/boards/`**
 
@@ -280,7 +336,7 @@ Authorization: Token <token>
 
 ---
 
-### 6. Get Board Content (one level)
+### 7. Get Board Content (one level)
 
 **`GET /api/keyboard/boards/<board_id>/`**
 
@@ -479,7 +535,9 @@ All size values are integers in **bytes**:
 | `file_size` | Item | Item has no uploaded media file |
 | `preview_size` | Item | No `mosaic_preview` thumbnail on storage |
 
-Use these values to estimate download/storage requirements before fetching media offline. Sizes are resolved from storage at sync time; orphaned DB records whose file no longer exists return `0`.
+Sizes are persisted on the board/item rows at upload time and exposed unchanged by `/sync/`.
+Missing media resolves to `0`. Clients may use these fields together with `GET /sync/estimate/`
+to determine offline download and storage requirements before fetching media.
 
 ### SyncResponse
 
@@ -757,9 +815,10 @@ apps/keyboard_api/
 ├── firebase.py        # Firebase Admin SDK helpers (send_boards_sync_notification)
 ├── tasks.py           # Celery tasks (notify_boards_changed, notify_board_owner)
 ├── responses.py       # json_response helper (JsonResponse wrapper)
-├── serializers.py     # serialize_full_boards_sync, serialize_boards_list, serialize_board_content
+├── serializers.py     # serialize_full_boards_sync, serialize_sync_estimate,
+│                      # serialize_boards_list, serialize_board_content
 ├── views.py           # obtain_token, refresh_token, register_fcm_token, full_boards_sync,
-│                      # boards_list, board_content
+│                      # sync_estimate, boards_list, board_content
 ├── urls.py            # URL patterns under /api/keyboard/
 ├── migrations/
 │   ├── 0001_initial.py

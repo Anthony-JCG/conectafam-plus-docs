@@ -66,18 +66,21 @@ La arquitectura elegida separa las responsabilidades de forma limpia:
 2. POST /api/keyboard/auth/fcm-token/
    → register FCM device token
 
-3. GET  /api/keyboard/sync/            (no ?since — full sync)
+3. GET  /api/keyboard/sync/estimate/
+   → show download-size prompt (Apple 4.2.3(ii)) before fetching media
+
+4. GET  /api/keyboard/sync/            (no ?since — full sync)
    → is_full_sync: true
    → store all boards + store synced_at value locally
    → keyboard extension now has complete offline data
 
 ── Normal use ───────────────────────────────────────────────────────────
 
-4. [Web] User edits a board (any folder, item, or board metadata)
+5. [Web] User edits a board (any folder, item, or board metadata)
    → Django signal touches Board.updated_at
    → Celery task sends silent FCM push to affected devices
 
-5. Main app receives FCM push  (data.event == "boards_changed")
+6. Main app receives FCM push  (data.event == "boards_changed")
    → GET /api/keyboard/sync/?since=<last synced_at>  (delta sync)
    → is_full_sync: false
    → upsert changed boards into local store
@@ -282,7 +285,64 @@ local.
 
 ---
 
-### 5. Listar tableros (navegación progresiva)
+### 5. Estimación de tamaño de medios offline
+
+**`GET /api/keyboard/sync/estimate/`**
+
+Devuelve solo el tamaño total en bytes y el número de archivos de una caché offline completa de
+todos los tableros a los que el usuario tiene acceso. Lo usa la app host Flutter para mostrar un
+aviso de tamaño de descarga **antes** de llamar a `GET /sync/` y descargar medios (Apple App Store
+guideline 4.2.3(ii)).
+
+**No** devuelve tableros, ítems, URLs ni medios. La forma de `GET /sync/` no cambia.
+
+Llámalo tras el login (y antes de la primera sync completa / descarga de medios). La extensión de
+teclado nunca llama a este endpoint.
+
+#### Cabeceras de la petición
+
+```
+Authorization: Token <token>
+```
+
+Sin parámetros de query.
+
+#### Respuestas
+
+| Status | Descripción | Body |
+|---|---|---|
+| `200 OK` | Totales de tamaño | `{"bytes": int, "file_count": int}` |
+| `401 Unauthorized` | Token ausente o inválido | `{"error": "..."}` |
+| `500 Internal Server Error` | Error inesperado | `{"error": "Internal server error."}` |
+
+#### Cuerpo de la respuesta
+
+```json
+{
+  "bytes": 1684488192,
+  "file_count": 1234
+}
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `bytes` | `int` | Suma de cada `cover_image_size` (board) + `file_size` (ítem) + `preview_size` (ítem) distinto de cero que el usuario descargaría en una caché offline completa. Mismas reglas que `/sync/`: `0` significa sin archivo / sin preview / sin portada y se omite. |
+| `file_count` | `int` | Cuántos de esos campos de tamaño eran distintos de cero (cada campo no cero cuenta como un archivo). |
+
+Ambos campos son siempre enteros JSON presentes (nunca null, nunca omitidos). Catálogo vacío:
+
+```json
+{"bytes": 0, "file_count": 0}
+```
+
+La resolución de acceso coincide con `GET /sync/` (propios + biblioteca + colaborador + públicos).
+Los tamaños se persisten en `Board.cover_image_size`, `BoardItem.file_size` y `BoardItem.preview_size`
+al subir o cambiar medios, así que este endpoint es un `SUM` / `COUNT` SQL — sin HEAD por archivo
+ni descarga de medios. El payload es mínimo (Gzip opcional).
+
+---
+
+### 6. Listar tableros (navegación progresiva)
 
 **`GET /api/keyboard/boards/`**
 
@@ -305,7 +365,7 @@ Authorization: Token <token>
 
 ---
 
-### 6. Obtener contenido de un tablero (un nivel)
+### 7. Obtener contenido de un tablero (un nivel)
 
 **`GET /api/keyboard/boards/<board_id>/`**
 
@@ -511,9 +571,10 @@ Todos los valores de tamaño son enteros en **bytes**:
 | `file_size` | Ítem | El ítem no tiene archivo multimedia subido |
 | `preview_size` | Ítem | No existe miniatura `mosaic_preview` en storage |
 
-Úsalos para estimar requisitos de descarga/almacenamiento offline antes de obtener los medios. Los
-tamaños se resuelven desde storage en el momento de la sync; registros huérfanos cuyo archivo ya no
-existe devuelven `0`.
+Los tamaños se persisten en las filas de board/ítem al subir y `/sync/` los expone sin
+transformación. Sin medios el valor es `0`. El cliente puede combinar estos campos con
+`GET /sync/estimate/` para determinar los requisitos de descarga y almacenamiento offline
+antes de obtener los medios.
 
 ### SyncResponse
 
@@ -819,9 +880,10 @@ apps/keyboard_api/
 ├── firebase.py        # Firebase Admin SDK helpers (send_boards_sync_notification)
 ├── tasks.py           # Celery tasks (notify_boards_changed, notify_board_owner)
 ├── responses.py       # json_response helper (JsonResponse wrapper)
-├── serializers.py     # serialize_full_boards_sync, serialize_boards_list, serialize_board_content
+├── serializers.py     # serialize_full_boards_sync, serialize_sync_estimate,
+│                      # serialize_boards_list, serialize_board_content
 ├── views.py           # obtain_token, refresh_token, register_fcm_token, full_boards_sync,
-│                      # boards_list, board_content
+│                      # sync_estimate, boards_list, board_content
 ├── urls.py            # URL patterns under /api/keyboard/
 ├── migrations/
 │   ├── 0001_initial.py
