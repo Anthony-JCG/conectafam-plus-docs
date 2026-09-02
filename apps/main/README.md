@@ -81,7 +81,7 @@ URL prefix: **`/main/`**
 | Endpoint | Name | Returns |
 |---|---|---|
 | `home/` (POST) | `home` | `components/card-sh-tasks.html` after completing a scheduled task |
-| `set-monthly-goals/`, `save-monthly-stats/` | `set_monthly_goals`, `save_monthly_stats` | `components/monthly-stats.html` when `request.htmx` |
+| `set-monthly-goals/`, `save-monthly-stats/` | `set_monthly_goals`, `save_monthly_stats` | `components/monthly-stats-htmx.html` when `request.htmx` (section plus OOB modal summaries) |
 | `load-incentive-form/` | `load_incentive_form` | `components/partials/incentive-form-fields.html` |
 | `my-team/` (POST) | `my_team` | Re-rendered invitation tree after sending an invite |
 | `load-user-children/` | `load_user_children` | Lazy-loaded tree branch |
