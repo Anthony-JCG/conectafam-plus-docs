@@ -20,8 +20,9 @@ Relación con las apps núcleo:
 - **`users.User`** — propietario de categorías, subsecciones autoradas, progreso y mensajes.
 
 La visibilidad de `first_steps` tiene su propia regla de corte de línea
-(`apply_first_steps_line_cut`, `get_first_steps_top_sponsor`) superpuesta al recorrido estándar de
-sponsor.
+(`get_first_steps_visible_queryset`, `get_first_steps_top_sponsor`) superpuesta al recorrido estándar de
+sponsor. La línea cortada sustituye las categorías de `USER_ROOT` / `FIRST_LEADER_PRO` por las del
+usuario ancla, para que los líderes anidados sigan heredando ese contenido.
 
 ## Modelos y datos
 
@@ -44,7 +45,7 @@ No hay `services.py`. La lógica vive en:
 
 | Módulo | Responsabilidad |
 |---|---|
-| `utils.py` | Visibilidad de first-steps (`apply_first_steps_line_cut`, `get_first_steps_top_sponsor`), agregación de progreso (`build_first_steps_progress_data`), resolución de la primera subsección efectiva, emails de notificación al sponsor, manejo de mensajes de inicio/fin |
+| `utils.py` | Visibilidad de first-steps (`get_first_steps_visible_queryset`, `get_first_steps_top_sponsor`, `get_onboarding_categories`), agregación de progreso (`build_first_steps_progress_data`), completado de onboarding (`evaluate_initial_training_completion`), resolución de la primera subsección efectiva, emails de notificación al sponsor, manejo de mensajes de inicio/fin |
 | `forms.py` | Formularios de categoría, sección, subsección, mensajes y primera formación |
 | `signals.py` | Crea una categoría por defecto cuando se crea un `leader_pro`; invalida cachés de progreso y de acceso oculto. Registrado desde `apps.py` |
 

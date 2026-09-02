@@ -18,8 +18,10 @@ Relationship to the core apps:
   caching, notifications, and file utilities.
 - **`users.User`** — owns categories, authored subsections, progress, and messages.
 
-`first_steps` visibility has its own line-cut rule (`apply_first_steps_line_cut`,
-`get_first_steps_top_sponsor`) layered on top of the standard sponsor traversal.
+`first_steps` visibility has its own line-cut rule (`get_first_steps_visible_queryset`,
+`get_first_steps_top_sponsor`) layered on top of the standard sponsor traversal. The cut line
+substitutes the anchor user's categories for `USER_ROOT` / `FIRST_LEADER_PRO` so nested leaders
+still inherit that content.
 
 ## Models and Data
 
@@ -42,7 +44,7 @@ There is no `services.py`. Logic lives in:
 
 | Module | Responsibility |
 |---|---|
-| `utils.py` | First-steps visibility (`apply_first_steps_line_cut`, `get_first_steps_top_sponsor`), progress aggregation (`build_first_steps_progress_data`), resolution of the effective first subsection, sponsor notification emails, start/end message handling |
+| `utils.py` | First-steps visibility (`get_first_steps_visible_queryset`, `get_first_steps_top_sponsor`, `get_onboarding_categories`), progress aggregation (`build_first_steps_progress_data`), onboarding completion (`evaluate_initial_training_completion`), resolution of the effective first subsection, sponsor notification emails, start/end message handling |
 | `forms.py` | Category, section, subsection, message, and first-formation forms |
 | `signals.py` | Creates a default category when a `leader_pro` is created; invalidates progress and hidden-access caches. Registered from `apps.py` |
 
