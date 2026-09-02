@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.3.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.3.0...v4.3.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* barras mensuales HTMX, clipboard al compartir y modal de seguimiento ([666181f](https://github.com/Anthony-JCG/conectafam-plus/commit/666181ff8a93574545d042619b1ea8bf7b3a2c0c))
+* **communication:** skip edit modal on leader follow-up rows ([d7348eb](https://github.com/Anthony-JCG/conectafam-plus/commit/d7348eb87ba999b236c6fa397b46559cbf264a81))
+* **landing:** handle clipboard denial when sharing urls ([6841b4f](https://github.com/Anthony-JCG/conectafam-plus/commit/6841b4f9ea611de978f0391f4b66c0edc1a4bc56))
+* **main:** refresh monthly progress bars after htmx save ([a9789d4](https://github.com/Anthony-JCG/conectafam-plus/commit/a9789d43c7100418b3e148a4d78aeb74ba5deea1))
+* **training:** restore first-steps for the line-cut downline ([#273](https://github.com/Anthony-JCG/conectafam-plus/issues/273)) ([0c7a746](https://github.com/Anthony-JCG/conectafam-plus/commit/0c7a7468b5c7b3644fdd0f3eb030738e4e5a9bea))
+
 ## [4.3.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.2.0...v4.3.0) (2026-09-01)
 
 
