@@ -1,5 +1,19 @@
 # Changelog
 
+## [4.3.3](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.3.2...v4.3.3) (2026-09-08)
+
+
+### Bug Fixes
+
+* **main:** guard modal without bootstrap config ([725ad6e](https://github.com/Anthony-JCG/conectafam-plus/commit/725ad6e9211ae6b4aab252f4c87b3093008e6be0))
+* **training:** new badge, modal guard and shortcuts padding ([f19bf33](https://github.com/Anthony-JCG/conectafam-plus/commit/f19bf33043627d159ac568a43a90b2712b5db488))
+* **training:** show new badge for recent formations ([36589ab](https://github.com/Anthony-JCG/conectafam-plus/commit/36589ab288cacc24f8bb179d1cd6e895f2c48d14))
+
+
+### Code Refactoring
+
+* **shortcuts-bar:** remove unnecessary padding rule ([bd2137c](https://github.com/Anthony-JCG/conectafam-plus/commit/bd2137ccbe862861d767f17a4141369cc11ad2f0))
+
 ## [4.3.2](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.3.1...v4.3.2) (2026-09-08)
 
 
