@@ -1,5 +1,18 @@
 # Changelog
 
+## [4.3.2](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.3.1...v4.3.2) (2026-09-08)
+
+
+### Bug Fixes
+
+* **landing:** keep new blocks as drafts until save ([c79511a](https://github.com/Anthony-JCG/conectafam-plus/commit/c79511a58a0e23669a6301ea27ba12c22be8bc6e))
+* **landing:** remount quill and tighten text spacing ([5fbe24a](https://github.com/Anthony-JCG/conectafam-plus/commit/5fbe24a5377ad9c15420b26242109da5b4197228))
+* **main:** dispose notification alerts without race ([5cdb17c](https://github.com/Anthony-JCG/conectafam-plus/commit/5cdb17c60c662f97b3c4dbe11b49fbbe53f4c271))
+* **main:** pin shortcuts bar to the viewport ([29bb1da](https://github.com/Anthony-JCG/conectafam-plus/commit/29bb1dafbf99c3ddacf687b784cc6bd857bbed6c))
+* training badge, shortcuts, landing editor and sentry 404s ([1f33c8c](https://github.com/Anthony-JCG/conectafam-plus/commit/1f33c8cccd24d16196cc07f281fde10c96a798bf))
+* **training:** restore new badge from created_at ([b15f115](https://github.com/Anthony-JCG/conectafam-plus/commit/b15f1153882de4dee3395a20aef182c79af318d9))
+* **training:** return json 404 for missing subsection ([93914c4](https://github.com/Anthony-JCG/conectafam-plus/commit/93914c41eb403d174f201311be5efba1ec171df4))
+
 ## [4.3.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.3.0...v4.3.1) (2026-09-02)
 
 
