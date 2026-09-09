@@ -64,7 +64,12 @@ Invalidar con `level.invalidate_prices_cache()` o `invalidate_stripe_subscriptio
 Funciones clave en `stripe_utils.py`: `get_or_create_stripe_customer`, `create_checkout_session`,
 `create_customer_portal_session`, `sync_subscription_status`, `has_active_stripe_subscription`,
 `get_level_prices_from_stripe`, `get_plan_value`, `detect_plan_change_type`,
-`apply_downgrade_at_period_end`.
+`apply_downgrade_at_period_end`, `schedule_subscription_cancel_at_period_end`.
+
+`schedule_subscription_cancel_at_period_end` marca `cancel_at_period_end=True` en las suscripciones
+facturables (sin reembolso, igual que el Customer Portal). Customer ausente o inválido y cuentas
+sin suscripción facturable son no-ops. Un `modify` fallido tras reintentos lanza
+`StripeCancelAtPeriodEndError`.
 
 ## Vistas e integración frontend
 

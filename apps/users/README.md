@@ -66,6 +66,20 @@ FK → `User`. One row per account registered in a browser, enabling the multi-a
 
 FK → `User`. Short-lived codes for admin two-factor authentication.
 
+### `DeletedAccount`
+
+Audit row written when a user deletes their account. Not linked to `User` (the row must survive
+`user.delete()`). Username and email are not unique: the same identity may register and delete again.
+
+| Field | Type | Notes |
+|---|---|---|
+| `username` | Char | Snapshot at deletion time |
+| `email` | Email | Snapshot at deletion time |
+| `deleted_at` | DateTime | `auto_now_add` |
+| `email_sent` | bool | Set `True` only after the confirmation email sends successfully |
+
+Django admin is read-only (`add` / `change` / `delete` denied).
+
 ## Views and Frontend Integration
 
 **This app does not use HTMX.** Every view returns a full HTML page or a redirect; there are no JSON
@@ -85,6 +99,7 @@ which is why they own top-level paths such as `/login/`.
 | `send_verification_code` / `verify_code` | `send-verification-code/`, `verify-code/` | Admin 2FA |
 | `personal_link_mate` | `<username>_link/` | **Public Link Mate page**; renders data owned by `links` |
 | `add_account`, `switch_account`, `remove_account_view`, `logout_all_accounts` | `accounts/…` | Multi-account session management |
+| `delete_account` | `accounts/delete/` | Authenticated account deletion (credentials + confirm); not available during onboarding |
 
 Password reset uses `django.contrib.auth.views` with project templates
 (`forgot-password.html`, `reset-password/…`) and custom forms `PasswordResetCustomForm` /
@@ -122,10 +137,11 @@ Supporting modules:
 | Module | Responsibility |
 |---|---|
 | `services/multi_account.py` | Browser-level account registry, switching, removal |
+| `services/account_deletion.py` | `delete_user_account`: period-end Stripe cancel, downline reassignment, audit, hard delete |
 | `utils.py` | Email dispatch through Celery, `redirect_authenticated_user` decorator, registration URL builders |
 | `public_routes.py` | Regex list of routes exempt from `LoginRequiredMiddleware` |
 | `context_processor.py` | Injects `saved_accounts` into every template |
-| `tasks.py` | `send_email_task` (Celery) |
+| `tasks.py` | `send_email_task`, `send_account_deleted_email_task` (Celery) |
 
 App dependencies: `communication`, `core`, `main`, `user_levels`, and lazy imports of `training`,
 `challenge`, `pricing`, `links`. External: Celery (email), Redis (indirect, through `core`).

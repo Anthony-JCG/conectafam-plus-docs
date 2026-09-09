@@ -68,6 +68,20 @@ FK → `User`. Una fila por cuenta registrada en un navegador, habilitando el co
 
 FK → `User`. Códigos de corta duración para la autenticación de dos factores del admin.
 
+### `DeletedAccount`
+
+Fila de auditoría al eliminar una cuenta. No tiene FK a `User` (debe sobrevivir a `user.delete()`).
+Username y email no son únicos: la misma identidad puede volver a registrarse y eliminarse.
+
+| Campo | Tipo | Notas |
+|---|---|---|
+| `username` | Char | Instantánea en el momento del borrado |
+| `email` | Email | Instantánea en el momento del borrado |
+| `deleted_at` | DateTime | `auto_now_add` |
+| `email_sent` | bool | `True` solo tras un envío de correo correcto |
+
+El admin de Django es de solo lectura (sin alta, edición ni borrado).
+
 ## Vistas e integración frontend
 
 **Esta app no usa HTMX.** Cada vista devuelve una página HTML completa o una redirección; no hay
@@ -87,6 +101,7 @@ Las rutas se montan en la raíz del proyecto (`Platform/urls.py` incluye `apps.u
 | `send_verification_code` / `verify_code` | `send-verification-code/`, `verify-code/` | 2FA del admin |
 | `personal_link_mate` | `<username>_link/` | **Página pública Link Mate**; renderiza datos propiedad de `links` |
 | `add_account`, `switch_account`, `remove_account_view`, `logout_all_accounts` | `accounts/…` | Gestión de sesión multi-cuenta |
+| `delete_account` | `accounts/delete/` | Eliminación de cuenta autenticada (credenciales + confirmación); no disponible en onboarding |
 
 El restablecimiento de contraseña usa `django.contrib.auth.views` con plantillas del proyecto
 (`forgot-password.html`, `reset-password/…`) y formularios personalizados
@@ -124,10 +139,11 @@ Módulos de soporte:
 | Módulo | Responsabilidad |
 |---|---|
 | `services/multi_account.py` | Registro de cuentas a nivel de navegador, cambio y eliminación |
+| `services/account_deletion.py` | `delete_user_account`: cancelación Stripe a fin de periodo, reasignación de downline, auditoría, borrado |
 | `utils.py` | Envío de email vía Celery, decorador `redirect_authenticated_user`, constructores de URL de registro |
 | `public_routes.py` | Lista de regex de rutas exentas de `LoginRequiredMiddleware` |
 | `context_processor.py` | Inyecta `saved_accounts` en cada plantilla |
-| `tasks.py` | `send_email_task` (Celery) |
+| `tasks.py` | `send_email_task`, `send_account_deleted_email_task` (Celery) |
 
 Dependencias de apps: `communication`, `core`, `main`, `user_levels`, e importaciones diferidas de
 `training`, `challenge`, `pricing`, `links`. Externas: Celery (email), Redis (indirecto, a través de
