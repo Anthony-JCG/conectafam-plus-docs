@@ -1,5 +1,23 @@
 # Changelog
 
+## [4.4.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.3.3...v4.4.0) (2026-09-09)
+
+
+### Features
+
+* **pricing:** schedule stripe cancel at period end ([14dcf57](https://github.com/Anthony-JCG/conectafam-plus/commit/14dcf570a68c798a3c4705c440620e409e481834))
+* **users:** add account deletion service and view ([34fb2b9](https://github.com/Anthony-JCG/conectafam-plus/commit/34fb2b996233e5dd7b2c8c75ea15efacdbc81db1))
+* **users:** add authenticated account deletion flow ([9b1b358](https://github.com/Anthony-JCG/conectafam-plus/commit/9b1b3581108c5bebbfff1737eb0aa9bc9d4e02da))
+* **users:** add delete-account navbar and page ([5b48137](https://github.com/Anthony-JCG/conectafam-plus/commit/5b4813744badd2cac33edd7a9b8357888013951c))
+* **users:** add DeletedAccount model and admin ([87e83e0](https://github.com/Anthony-JCG/conectafam-plus/commit/87e83e0d5aee873eec81b555541dd85d8544a5cb))
+* **users:** enhance delete account page with title styling ([87dea6e](https://github.com/Anthony-JCG/conectafam-plus/commit/87dea6e894885717287d8890d6fdf2d2bf7af98c))
+
+
+### Documentation
+
+* **pricing:** document period-end cancel helper ([b568d6d](https://github.com/Anthony-JCG/conectafam-plus/commit/b568d6d62518ed12ba3034025be1d9e045eb9706))
+* **users:** document account deletion ([ff5332b](https://github.com/Anthony-JCG/conectafam-plus/commit/ff5332b6fe46006116d9b42d6d84b8a52f5c0956))
+
 ## [4.3.3](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.3.2...v4.3.3) (2026-09-08)
 
 
