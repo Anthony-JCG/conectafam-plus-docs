@@ -1,5 +1,23 @@
 # Changelog
 
+## [4.5.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.4.0...v4.5.0) (2026-09-09)
+
+
+### Features
+
+* **users:** add account deletion from profile page ([f8e4f5b](https://github.com/Anthony-JCG/conectafam-plus/commit/f8e4f5bd8ff3227ef0c6186eb3b62e94ec5ec5cb))
+
+
+### Bug Fixes
+
+* **pro-locked-content:** update apple link and change button to anchor ([2333935](https://github.com/Anthony-JCG/conectafam-plus/commit/233393565492d5cb2cdc2945f0e68548ac943142))
+
+
+### Code Refactoring
+
+* **main:** center align buttons in personal info form ([99b63e8](https://github.com/Anthony-JCG/conectafam-plus/commit/99b63e87ac5779a5c0eed7b860d54f6980af2f8d))
+* **main:** move delete account button to profile ([5ee5da5](https://github.com/Anthony-JCG/conectafam-plus/commit/5ee5da50beaf4853d55f4ef99873dea8bbd170f0))
+
 ## [4.4.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.3.3...v4.4.0) (2026-09-09)
 
 
