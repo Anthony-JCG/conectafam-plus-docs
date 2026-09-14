@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.5.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.5.0...v4.5.1) (2026-09-12)
+
+
+### Bug Fixes
+
+* **communication:** blank invite email for null contacts ([#287](https://github.com/Anthony-JCG/conectafam-plus/issues/287)) ([cba3252](https://github.com/Anthony-JCG/conectafam-plus/commit/cba3252c1b26e4df28edf1cdfbf6c2157078fce3))
+* **communication:** prefill invite user modal from card ([#285](https://github.com/Anthony-JCG/conectafam-plus/issues/285)) ([79f22d4](https://github.com/Anthony-JCG/conectafam-plus/commit/79f22d4ee728d44b3d06349be028ffa2a0ec03e1))
+
 ## [4.5.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.4.0...v4.5.0) (2026-09-09)
 
 
