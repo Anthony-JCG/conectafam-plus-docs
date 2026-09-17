@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.6.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.5.1...v4.6.0) (2026-09-17)
+
+
+### Features
+
+* **boards:** add leader collaborator access rules ([#290](https://github.com/Anthony-JCG/conectafam-plus/issues/290)) ([c4aba36](https://github.com/Anthony-JCG/conectafam-plus/commit/c4aba36bb5d57c71f076d1eb6bfdcb5bcc028ff0))
+
+
+### Code Refactoring
+
+* **communication:** redesign contact card and delete flow ([#288](https://github.com/Anthony-JCG/conectafam-plus/issues/288)) ([3fed3bf](https://github.com/Anthony-JCG/conectafam-plus/commit/3fed3bf4407bd680472b6efdd05beca5bb94de42))
+
 ## [4.5.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.5.0...v4.5.1) (2026-09-12)
 
 
