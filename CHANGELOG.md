@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.6.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.6.0...v4.6.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* **communication:** fix disordered contact cards grid ([#291](https://github.com/Anthony-JCG/conectafam-plus/issues/291)) ([ad71aa3](https://github.com/Anthony-JCG/conectafam-plus/commit/ad71aa3b46c53ef6bcc670cc494c89ddbd3fbbe4))
+* **links:** close idor holes and rebuild link mate on htmx ([#293](https://github.com/Anthony-JCG/conectafam-plus/issues/293)) ([8b92cf9](https://github.com/Anthony-JCG/conectafam-plus/commit/8b92cf9aa4f45242500de903993d3938347c92fc))
+
 ## [4.6.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.5.1...v4.6.0) (2026-09-17)
 
 
