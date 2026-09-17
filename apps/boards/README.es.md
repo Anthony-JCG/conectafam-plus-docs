@@ -28,7 +28,7 @@ Relación con las apps núcleo:
 | `Board` | Contenedor del usuario: título, imagen de portada, orden, `share_token`, `allow_duplicate_on_share`, `is_public`. FK → `users.User` |
 | `BoardFolder` | Carpetas anidables (`parent` FK → self), ordenables en el mosaico |
 | `BoardItem` | Elemento del mosaico. Tipos: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`. Archivos hasta 10 MB. FK opcional → `landing.LandingPage` |
-| `BoardCollaborator` | Usuario invitado con acceso de lectura y edición. Único en `(board, user)` |
+| `BoardCollaborator` | Usuario invitado. Los colaboradores PRO+ tienen acceso de lectura y edición; los colaboradores Basic son de solo lectura. Único en `(board, user)` |
 | `BoardLibraryEntry` | Referencia a un tablero compartido guardado en la biblioteca propia (solo lectura) |
 | `BoardDeleteLog` | Registro append-only de tableros eliminados de forma permanente. `board_id` / `user_id` son enteros simples porque la fila `Board` ya no existe. Lo consume **solo** el endpoint de delta-sync de la keyboard API para que los clientes móviles sepan qué purgar |
 
@@ -37,7 +37,8 @@ Relación con las apps núcleo:
 | Tipo de usuario | Ver | Editar | Gestionar | Duplicar |
 |---|---|---|---|---|
 | Propietario | ✓ | ✓ | ✓ | ✓ |
-| Colaborador | ✓ | ✓ | — | ✓ |
+| Colaborador (PRO+) | ✓ | ✓ | — | ✓ |
+| Colaborador (Basic) | ✓ | — | — | ✓ |
 | Entrada de biblioteca | ✓ | — | — | Solo si `allow_duplicate_on_share` |
 | Tablero público | ✓ | — | — | — |
 
@@ -45,13 +46,15 @@ Relación con las apps núcleo:
 
 | Nivel | Acceso | Límite de creación | Compartir con el equipo (`is_public`) |
 |---|---|---|---|
-| Basic | Leer públicos/compartidos; escribir solo como colaborador | — | — |
+| Basic | Leer públicos/compartidos; solo lectura como colaborador | — | — |
 | Pro | Sí | 1 | — |
 | Leader | Sí | 3 | Sí, dentro de su burbuja de visibilidad |
 | Leader Pro | Sí | Ilimitado | Sí, mismas reglas de burbuja |
 
 Las rutas restringidas devuelven 404 a través de `RouteLevelAccessMiddleware`. Los colaboradores de
-nivel Basic conservan acceso de escritura en los tableros en los que colaboran.
+nivel Basic conservan acceso de lectura en los tableros en los que colaboran, sin permiso de
+escritura. Gestionar colaboradores (añadir/quitar) es una acción de propietario Leader / Leader Pro;
+los propietarios PRO ven la sección detrás del overlay de acceso restringido.
 
 ### Servicios
 

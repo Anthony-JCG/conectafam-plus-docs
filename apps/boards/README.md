@@ -27,7 +27,7 @@ Relationship to the core apps:
 | `Board` | User container: title, cover image, order, `share_token`, `allow_duplicate_on_share`, `is_public`. FK → `users.User` |
 | `BoardFolder` | Nestable folders (`parent` FK → self), sortable in the mosaic |
 | `BoardItem` | Mosaic element. Types: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`. Files up to 10 MB. Optional FK → `landing.LandingPage` |
-| `BoardCollaborator` | Invited user with read+edit access. Unique on `(board, user)` |
+| `BoardCollaborator` | Invited user. PRO+ collaborators have read+edit access; Basic collaborators are view-only. Unique on `(board, user)` |
 | `BoardLibraryEntry` | Reference to a shared board saved into the user's own library (read-only) |
 | `BoardDeleteLog` | Append-only log of permanently deleted boards. `board_id` / `user_id` are plain integers because the `Board` row is already gone. Consumed **only** by the keyboard API delta-sync endpoint so mobile clients know what to purge |
 
@@ -36,7 +36,8 @@ Relationship to the core apps:
 | User type | View | Edit | Manage | Duplicate |
 |---|---|---|---|---|
 | Owner | ✓ | ✓ | ✓ | ✓ |
-| Collaborator | ✓ | ✓ | — | ✓ |
+| Collaborator (PRO+) | ✓ | ✓ | — | ✓ |
+| Collaborator (Basic) | ✓ | — | — | ✓ |
 | Library entry | ✓ | — | — | Only if `allow_duplicate_on_share` |
 | Public board | ✓ | — | — | — |
 
@@ -44,13 +45,15 @@ Relationship to the core apps:
 
 | Level | Access | Creation limit | Share with team (`is_public`) |
 |---|---|---|---|
-| Basic | Read public/shared; write only as collaborator | — | — |
+| Basic | Read public/shared; view-only as collaborator | — | — |
 | Pro | Yes | 1 | — |
 | Leader | Yes | 3 | Yes, within its visibility bubble |
 | Leader Pro | Yes | Unlimited | Yes, same bubble rules |
 
-Restricted routes return 404 through `RouteLevelAccessMiddleware`. Basic-level collaborators keep
-write access to the boards they collaborate on.
+Restricted routes return 404 through `RouteLevelAccessMiddleware`. Basic-level collaborators
+keep view access to the boards they collaborate on, but cannot write content. Managing
+collaborators (add/remove) is a Leader / Leader Pro owner action; PRO owners see the section
+behind a restricted-access overlay.
 
 ### Services
 
