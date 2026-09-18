@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.6.2](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.6.1...v4.6.2) (2026-09-18)
+
+
+### Bug Fixes
+
+* **links:** make editor list rows work on mobile ([#294](https://github.com/Anthony-JCG/conectafam-plus/issues/294)) ([1ce15f1](https://github.com/Anthony-JCG/conectafam-plus/commit/1ce15f17f08be52dbea348aeb0b396f2cb79faed))
+
 ## [4.6.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.6.0...v4.6.1) (2026-09-17)
 
 
