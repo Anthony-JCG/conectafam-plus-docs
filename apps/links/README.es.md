@@ -69,6 +69,11 @@ Prefijo de URL: **`/links/`**. La página pública está fuera de esta app, en `
 | `save-customization/` | `save_link_mate_customization` | Re-renderiza el grupo de control (fuente, forma, fondo) o `204` |
 | `reorder-items/` | `reorder_items` | Orden de la lista personal incluyendo el botón de contacto → `204` |
 
+Las listas del editor —enlaces personales, redes sociales y PRO— comparten
+`components/partials/link-list-row.html` para la estructura de cada fila (agarre, título que salta
+de línea, borrar e interruptor). Quien incluye el parcial pasa el texto visible como `title`
+(`item.label` en las filas mixtas de la lista personal; `.name` en PRO y redes sociales).
+
 Modales: `modal-link.html` (personal y PRO) lo gobierna el cargador global `htmx_modal_form.js`;
 `modal-social-link.html` y `modal-store-link.html` usan `hx-get` / `hx-post` en línea. El
 `modal-delete-confirm.html` compartido pasa a HTMX cuando se incluye con `delete_hx=1`.

@@ -68,6 +68,10 @@ URL prefix: **`/links/`**. The public page lives outside this app, at `<username
 | `save-customization/` | `save_link_mate_customization` | Re-renders the control group (font, shape, background) or `204` |
 | `reorder-items/` | `reorder_items` | Personal-links order including the contact button → `204` |
 
+The personal, social, and PRO editor lists share `components/partials/link-list-row.html` for the
+row chrome (grip, wrapping title, delete, toggle). Callers pass the visible text as `title`
+(`item.label` on mixed personal rows, `.name` on PRO and social).
+
 Modals: `modal-link.html` (personal and PRO) is driven by the global `htmx_modal_form.js` loader;
 `modal-social-link.html` and `modal-store-link.html` use inline `hx-get` / `hx-post`. The shared
 `modal-delete-confirm.html` switches to HTMX when included with `delete_hx=1`.
