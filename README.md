@@ -122,6 +122,7 @@ and consumed on the client by the modal lifecycle in `static/js/core.js`. CSRF i
 | [`streaming`](apps/streaming/README.md)         | `/streaming/`                  | No   | Live sessions with HLS video and post-session conversion                              |
 | [`pricing`](apps/pricing/README.md)             | `/pricing/`                    | No   | Stripe subscriptions, Customer Portal, webhooks, free trial cancellation              |
 | [`keyboard_api`](apps/keyboard_api/README.md)   | `/api/keyboard/`               | n/a  | Token-authenticated JSON API for the mobile keyboard client                           |
+| [`client_area`](apps/client_area/README.md)     | —                              | —    | Advisor client area: profiles, programs, measurements, academy (native API pending)    |
 
 A `—` prefix means the app owns no URLConf. `core` has no `urls.py`: its handful of views are
 registered one by one at the site root in `Platform/urls.py` (`/sw.js`, `/share-preview/`,
