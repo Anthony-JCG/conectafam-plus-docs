@@ -7,7 +7,8 @@ ligado a un `communication.Contact`, no un `users.User` del árbol de patrocinio
 Relación con las apps núcleo:
 
 - **`user_levels`** — `CLIENT_AREA_MODEL_KEY` + `ACCESS_ACTION_KEY`. Líder y Líder Pro permitidos.
-  Básico/Pro denegados aquí; el bypass del add-on llega en una rama posterior.
+  Básico/Pro denegados ahí; `user_has_client_area` también acepta el add-on `client_area`
+  comprado (`pricing.UserAddon`).
 - **`communication`** — `ClientProfile.contact` es OneToOne a `Contact`. Las notas de alta/baja
   del programa escribirán `ActivityContact`.
 - **`boards`** — el catálogo y las carpetas de academia apuntan a `BoardItem` / `BoardFolder`.
@@ -34,11 +35,17 @@ Relación con las apps núcleo:
 | Módulo | Responsabilidad |
 |---|---|
 | `services/access.py` | Asignación de código de acceso único. |
+| `services/entitlement.py` | `user_has_client_area(user)` — capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)`. |
 | `services/programs.py` | Fecha de fin y ventana activa del programa. |
 
-Aún no hay vistas. El URLConf está vacío; los panes HTMX y `/api/client/` van en ramas siguientes.
+La pestaña del modal de contacto vive en `communication`. Básico/Pro bloqueados ven
+`RestrictedAccessAlert` `client_area_addon`, cuyo botón hace POST a `create_addon_checkout`
+con `client_area`. El URLConf sigue vacío; las herramientas HTMX y
+`/api/client/` van en ramas siguientes.
 
 ## Configuración y dependencias
 
-Dependencias: `communication`, `boards`, `users`, `user_levels`. Media por el backend global.
-Esta app **aún no usa** Stripe, Sentry, Redis ni Celery.
+Dependencias: `communication`, `boards`, `users`, `user_levels`, `pricing`. Media por el backend
+global. El catálogo de add-ons, sus precios por nivel y el checkout Stripe viven en `pricing`
+(`Addon` con código `client_area`, sembrado por la migración `0003` de `pricing`).
+Esta app **aún no usa** Sentry, Redis ni Celery.

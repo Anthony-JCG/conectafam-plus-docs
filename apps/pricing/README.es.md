@@ -8,7 +8,10 @@ el punto en el que se cancela la prueba gratuita de 7 días cuando un usuario em
 
 Esta app **no decide permisos**. Resuelve a qué `user_levels.Level` mapea una suscripción Stripe y
 lo escribe; cada capability, límite y consecuencia de degradación lo gestiona `user_levels` (véase
-[`apps/user_levels/README.es.md`](../user_levels/README.es.md)).
+[`apps/user_levels/README.es.md`](../user_levels/README.es.md)). También vende **add-ons**
+(herramientas de pago sobre un plan) y registra quién los compró en `UserAddon`; cada app de
+funcionalidad combina su capability con `user_has_addon` para su puerta de UI (p. ej.
+`client_area.user_has_client_area`).
 
 Relación con las apps núcleo:
 
@@ -24,7 +27,18 @@ Relación con las apps núcleo:
 
 OneToOne → `users.User`. Espejo local de la suscripción Stripe activa: ID de suscripción, ID de
 precio, estado y límites del periodo. Escrito por `upsert_subscription_record` y
-`mark_subscription_deleted`.
+`mark_subscription_deleted`. Solo sigue la suscripción **de plan**; las de add-ons nunca lo tocan.
+
+### Add-ons: `Addon`, `AddonPrice`, `UserAddon`
+
+| Modelo | Propósito |
+|---|---|
+| `Addon` | Entrada del catálogo. `code` coincide con el metadato `addon_code` del producto Stripe. `capability_model_key` + `capability_action` nombran la capability de `user_levels` que ya incluye la herramienta (esos niveles no pagan). `is_active` = a la venta. |
+| `AddonPrice` | Precio mensual de Stripe por `(addon, nivel)`. Un nivel sin fila no puede comprar el add-on. |
+| `UserAddon` | Estado de compra por `(usuario, addon)`: `is_active`, `stripe_subscription_id`, `stripe_item_id`. Solo lo escriben los webhooks de Stripe y la reconciliación. |
+
+Los precios viven en la base de datos (admin → *Add-ons*), igual que los de plan en `Level`, así
+cada entorno (sandbox, live) pone sus propios IDs sin settings nuevos.
 
 ### Prueba gratuita
 
@@ -60,11 +74,15 @@ Invalidar con `level.invalidate_prices_cache()` o `invalidate_stripe_subscriptio
 |---|---|
 | `stripe_utils.py` | Cliente Stripe, creación de customer, sesiones de checkout y portal, sincronización de suscripción, detección de cambio de plan, caché de precios y estado |
 | `utils.py` | Emails del ciclo de vida de suscripción (creada, ascendida, degradada, cancelada) |
+| `services/addons.py` | Comprobación de acceso, precio por nivel, sincronización con Stripe y re-precio de add-ons |
+| `signals.py` · `tasks.py` | Encolan `reconcile_user_addons` cuando un usuario con add-ons cambia de nivel |
+| `templatetags/addons.py` | Filtro `addon_code`: convierte una clave de alerta `<code>_addon` en su add-on |
 
 Funciones clave en `stripe_utils.py`: `get_or_create_stripe_customer`, `create_checkout_session`,
-`create_customer_portal_session`, `sync_subscription_status`, `has_active_stripe_subscription`,
-`get_level_prices_from_stripe`, `get_plan_value`, `detect_plan_change_type`,
-`apply_downgrade_at_period_end`, `schedule_subscription_cancel_at_period_end`.
+`create_customer_portal_session`, `sync_subscription_status`, `subscription_addon_codes`,
+`has_active_stripe_subscription`, `get_level_prices_from_stripe`, `get_plan_value`,
+`detect_plan_change_type`, `apply_downgrade_at_period_end`,
+`schedule_subscription_cancel_at_period_end`.
 
 `schedule_subscription_cancel_at_period_end` marca `cancel_at_period_end=True` en las suscripciones
 facturables (sin reembolso, igual que el Customer Portal). Customer ausente o inválido y cuentas
@@ -82,6 +100,7 @@ Prefijo de URL: **`/pricing/`**
 |---|---|---|
 | `""` | `pricing_page` | Listado de planes (HTML) |
 | `checkout/<level_code>/<period>/` | `create_checkout` | Redirección 303 a Stripe Checkout, o al Customer Portal cuando ya hay una suscripción activa |
+| `addon/<addon_code>/checkout/` | `create_addon_checkout` | POST (`next` = ruta de vuelta): Checkout del add-on como suscripción propia al precio del nivel del usuario; vuelve a `next` si ya tiene acceso o no hay precio |
 | `checkout/success/` · `checkout/cancel/` | `checkout_success`, `checkout_cancel` | Páginas posteriores al checkout |
 | `portal/` | `customer_portal` | Redirección a una sesión nueva del Customer Portal |
 | `webhook/` | `stripe_webhook` | Receptor de webhooks con verificación de firma (`HttpResponse` 200/4xx/5xx) |
@@ -109,8 +128,10 @@ Versión de la API Stripe fijada por la integración: **2025-12-15**.
 
 ### Configuración del Stripe Dashboard
 
-**Subscriptions** (`settings/billing/automatic`) debe permitir **una suscripción activa por
-customer**. Cada usuario de la plataforma mapea a exactamente un customer de Stripe;
+**Subscriptions** — dejar **desactivado** *Limit customers to one subscription* de Checkout: el
+add-on de Área de clientes es una segunda suscripción. Una sola suscripción **de plan** por
+customer se garantiza en código (`create_checkout` manda al Customer Portal si ya hay plan activo).
+Cada usuario de la plataforma mapea a exactamente un customer de Stripe;
 `get_or_create_stripe_customer()` reutiliza `stripe_customer_id` o crea un customer nuevo con
 metadatos `user_id` / `username`.
 
@@ -119,7 +140,45 @@ precio mensual y uno anual. Cada producto **debe** llevar la clave de metadatos 
 valor `pro`, `leader` o `leader_pro`; `sync_subscription_status()` la usa para mapear una
 suscripción Stripe a un nivel de la plataforma.
 
-Los IDs de precio se almacenan en `user_levels.Level`:
+**Add-ons** — un producto Stripe por add-on, **sin** `level_code`, metadato `addon_code=<code>`,
+con un precio mensual por cada nivel que pueda comprarlo. Cada precio se registra en el admin como
+`AddonPrice`.
+
+- **Siempre es una suscripción propia.** El Customer Portal no permite cambiar de plan en
+  suscripciones con varios productos, y un add-on mensual no puede convivir con un plan anual en la
+  misma suscripción; por eso la suscripción de plan sigue teniendo un solo producto.
+- **Checkout** usa `get_addon_price_id(addon, user.level_code)`. El webhook **no** cambia el
+  `Level`; solo escribe `UserAddon`. `has_active_stripe_subscription` ignora las suscripciones de
+  add-ons.
+- **Cambios de nivel** (webhook de plan, fin de prueba, admin) disparan `pricing.signals`, que
+  encola `reconcile_user_addons`. Los cambios de cobro aplican siempre en la **próxima renovación**,
+  sin créditos ni cargos inmediatos: un precio distinto de nivel se programa con
+  `proration_behavior=none`, y si la capability del nuevo nivel ya incluye el add-on la suscripción
+  queda en `cancel_at_period_end` (el acceso sigue hasta entonces; luego lo cubre la capability).
+  Si el nuevo nivel no tiene precio, la suscripción no se toca y se registra un warning.
+- Quien tenga cualquier add-on puede abrir el Customer Portal para cancelarlo, aunque sea Básico.
+
+**Regla de independencia.** Planes y add-ons son suscripciones Stripe separadas con manejadores
+separados:
+
+| Evento | Efecto en el otro lado |
+|---|---|
+| Add-on comprado, renovado, cancelado o eliminado | Ninguno: `Level`, `StripeSubscriptionRecord`, prueba gratuita y emails de plan no se tocan (`sync_addon_subscription`, `_handle_addon_subscription_updated` / `_deleted`) |
+| Checkout de plan / portal / `has_active_stripe_subscription` / `subscription_status` | Solo cuenta la suscripción con ítem `level_code`; las de add-ons se ignoran |
+| Cambio de nivel (webhook de plan, fin de prueba, admin) | El cobro del add-on cambia solo en el **próximo periodo** (`reconcile_user_addons`): nuevo precio sin prorrateo, o `cancel_at_period_end` si el nivel ya incluye la herramienta. Sin créditos ni cargos a mitad de ciclo |
+
+**Añadir un add-on nuevo:**
+
+1. Stripe: crear el producto con `addon_code=<code>` y un precio mensual por nivel.
+2. `user_levels`: añadir la capability que lo incluye en los niveles altos (`DEFAULT_LEVELS` +
+   migración de datos), p. ej. `{"<model_key>": {"access": {"allowed": true}}}`.
+3. Admin → *Add-ons*: crear el `Addon` (código, nombre, capability) y sus filas `AddonPrice`.
+4. App de la funcionalidad: proteger la UI con la capability **o** `user_has_addon(user, "<code>")`.
+5. Pantalla de bloqueo: sembrar un `RestrictedAccessAlert` con clave `<code>_addon`;
+   `pro-locked-content.html` pinta el botón «Adquirir Herramienta» que hace POST a
+   `create_addon_checkout`.
+
+Los IDs de precio de plan se almacenan en `user_levels.Level`:
 
 ```python
 from apps.user_levels.models import Level, LevelType
@@ -138,7 +197,7 @@ pro.save()
 | `checkout.session.completed` | Sincroniza la suscripción inicial |
 | `customer.subscription.created` | Activa el nivel correspondiente |
 | `customer.subscription.updated` | Renovación, cambio de plan o cancelación programada |
-| `customer.subscription.deleted` | Degradación a BASIC |
+| `customer.subscription.deleted` | Plan: degradación a BASIC. Add-on: desactiva el `UserAddon`, no toca el nivel y avisa salvo que el nivel actual ya lo incluya |
 | `invoice.payment_succeeded` | Confirma que la suscripción está pagada |
 | `invoice.payment_failed` | Registrado; Stripe reintenta automáticamente |
 | `invoice.upcoming` | Aviso de renovación, 3 días antes por defecto |
@@ -191,6 +250,6 @@ LEADER→PRO (nivel retenido hasta fin de periodo) y cancelación (acceso hasta 
 Las variables de entorno se inyectan por entorno de despliegue; véase
 [`docs/docker.es.md`](../../docs/docker.es.md).
 
-Dependencias de apps: `core`, `user_levels`, `users`. Externas: Stripe, Redis. **Sin uso propio de
-Sentry, Celery ni Cloudflare** — la tarea Celery de caducidad de la prueba pertenece a
-`user_levels`.
+Dependencias de apps: `core`, `user_levels`, `users`, `client_area`. Externas: Stripe, Redis,
+Celery (`pricing.tasks.reconcile_user_addons`). Sin uso propio de Sentry ni Cloudflare; la
+tarea de caducidad de la prueba pertenece a `user_levels`.

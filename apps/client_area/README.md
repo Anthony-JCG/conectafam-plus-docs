@@ -7,7 +7,8 @@ plans, and (later) the native client API. Consumers are `ClientProfile` rows lin
 Relationship to the core apps:
 
 - **`user_levels`** — `CLIENT_AREA_MODEL_KEY` + `ACCESS_ACTION_KEY`. Leader and Leader Pro are
-  allowed. Basic/Pro are denied here; an add-on bypass is added in a later branch.
+  allowed. Basic/Pro are denied there; `user_has_client_area` also accepts the purchased
+  `client_area` add-on (`pricing.UserAddon`).
 - **`communication`** — `ClientProfile.contact` is OneToOne to `Contact`. Program start/end notes
   will write `ActivityContact` rows.
 - **`boards`** — catalog items and academy folders point at `BoardItem` / `BoardFolder`.
@@ -34,11 +35,17 @@ Relationship to the core apps:
 | Module | Responsibility |
 |---|---|
 | `services/access.py` | Unique access-code allocation. |
+| `services/entitlement.py` | `user_has_client_area(user)` — capability **or** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)`. |
 | `services/programs.py` | End date and active-window checks. |
 
-No views yet. URLConf is empty; HTMX panes and `/api/client/` come in later branches.
+The contact-modal tab is in `communication`. Locked Basic/Pro users see
+`RestrictedAccessAlert` `client_area_addon`, whose button posts to
+`create_addon_checkout` with `client_area`. URLConf is still empty; HTMX tools and `/api/client/`
+come in later branches.
 
 ## Configuration and Dependencies
 
-App dependencies: `communication`, `boards`, `users`, `user_levels`. Media via the global storage
-backend. No Stripe, Sentry, Redis, or Celery usage in this app yet.
+App dependencies: `communication`, `boards`, `users`, `user_levels`, `pricing`. Media via the
+global storage backend. The add-on catalog, its per-level prices, and Stripe checkout live in
+`pricing` (`Addon` with code `client_area`, seeded by `pricing` migration `0003`).
+No Sentry, Redis, or Celery usage in this app yet.

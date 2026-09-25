@@ -64,6 +64,10 @@ Prefijo de URL: **`/communication/`**
 | `load-message-form/` | `load_message_form` | GET parcial → `message-form-fields.html` / `follow-up-form-fields.html` |
 | `load-whatsapp-link-form/` | `load_whatsapp_link_form` | GET parcial → `whatsapp-link-form-fields.html` |
 
+La pestaña **Área de cliente** del modal se abre con `user_has_client_area`. Sin acceso muestra
+`RestrictedAccessAlert` `client_area_addon` y **Adquirir Herramienta** (checkout del add-on, no
+el de planes en `/pricing/`).
+
 Plantillas de envío: `components/modals/modal-contact.html` (`hx-get` + `hx-target`),
 `modal-sh-task.html` y `modal-activity-contact.html` (`hx-post` + `hx-target` + `data-close-modal`).
 Los modales de mensaje y de enlace WhatsApp en `messages.html` los impulsa el cargador global

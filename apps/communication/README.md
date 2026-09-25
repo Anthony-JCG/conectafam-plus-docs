@@ -62,6 +62,10 @@ URL prefix: **`/communication/`**
 | `load-message-form/` | `load_message_form` | GET partial → `message-form-fields.html` / `follow-up-form-fields.html` |
 | `load-whatsapp-link-form/` | `load_whatsapp_link_form` | GET partial → `whatsapp-link-form-fields.html` |
 
+The contact modal **Área de cliente** tab is gated by `user_has_client_area`. Without entitlement
+it renders `RestrictedAccessAlert` `client_area_addon` and **Adquirir Herramienta** (add-on
+checkout, not `/pricing/` plan checkout).
+
 Submitting templates: `components/modals/modal-contact.html` (`hx-get` + `hx-target`),
 `modal-sh-task.html` and `modal-activity-contact.html` (`hx-post` + `hx-target` + `data-close-modal`).
 The message and WhatsApp-link modals in `messages.html` are driven by the global
