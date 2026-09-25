@@ -43,7 +43,7 @@ The contact-modal tab is in `communication`. Locked Basic/Pro users see
 `create_addon_checkout` with `client_area`. With entitlement, `#pane-cliente` HTMX-loads
 `load_client_area_pane` (`/client-area/load-pane/`) with a section skeleton; full tools arrive in
 later branches. Contact cards show program active/inactive status from `services/programs.py`
-(not CRM `membership`). `/api/client/` remains phase 2.
+(not CRM `membership`). `/api/client/` is implemented in `apps/client_api` (Fam Fit native app).
 
 ## Configuration and Dependencies
 

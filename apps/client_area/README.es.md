@@ -43,7 +43,7 @@ La pestaña del modal de contacto vive en `communication`. Básico/Pro bloqueado
 con `client_area`. Con entitlement, `#pane-cliente` carga por HTMX `load_client_area_pane`
 (`/client-area/load-pane/`) con el esqueleto de secciones; las herramientas completas llegan en
 ramas siguientes. Las tarjetas de contacto muestran activo/inactivo del programa desde
-`services/programs.py` (no el `membership` del CRM). `/api/client/` sigue en la fase 2.
+`services/programs.py` (no el `membership` del CRM). `/api/client/` está en `apps/client_api` (app nativa Fam Fit).
 
 ## Configuración y dependencias
 
@@ -88,7 +88,7 @@ one y se crea nota de asesor.
 | services/expiry.py | Expiracion diaria de programas + push web al asesor |
 | 	asks.py | Celery expire_client_programs_task (beat 05:15) |
 
-La API nativa del cliente y FCM al consumidor quedan fuera (fase 2).
+La API nativa (Fam Fit) comienza en `apps/client_api`; FCM al consumidor en ramas posteriores.
 
 ## Pulido WEB (Rama 6)
 
