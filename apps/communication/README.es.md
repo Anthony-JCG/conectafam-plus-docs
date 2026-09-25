@@ -66,7 +66,8 @@ Prefijo de URL: **`/communication/`**
 
 La pestaña **Área de cliente** del modal se abre con `user_has_client_area`. Sin acceso muestra
 `RestrictedAccessAlert` `client_area_addon` y **Adquirir Herramienta** (checkout del add-on, no
-el de planes en `/pricing/`).
+el de planes en `/pricing/`). Con entitlement, HTMX carga `load_client_area_pane`. El filtro de sesión `filter_program_status` usa el programa activo/inactivo (no `membership` del CRM).
+
 
 Plantillas de envío: `components/modals/modal-contact.html` (`hx-get` + `hx-target`),
 `modal-sh-task.html` y `modal-activity-contact.html` (`hx-post` + `hx-target` + `data-close-modal`).

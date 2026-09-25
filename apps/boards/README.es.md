@@ -25,12 +25,32 @@ Relación con las apps núcleo:
 
 | Modelo | Responsabilidad |
 |---|---|
-| `Board` | Contenedor del usuario: título, imagen de portada, orden, `share_token`, `allow_duplicate_on_share`, `is_public`. FK → `users.User` |
+| `Board` | Contenedor del usuario: título, imagen de portada, orden, `share_token`, `allow_duplicate_on_share`, `is_public`, `is_client_area`. FK → `users.User` |
 | `BoardFolder` | Carpetas anidables (`parent` FK → self), ordenables en el mosaico |
 | `BoardItem` | Elemento del mosaico. Tipos: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`. Archivos hasta 10 MB. FK opcional → `landing.LandingPage` |
 | `BoardCollaborator` | Usuario invitado. Los colaboradores PRO+ tienen acceso de lectura y edición; los colaboradores Basic son de solo lectura. Único en `(board, user)` |
 | `BoardLibraryEntry` | Referencia a un tablero compartido guardado en la biblioteca propia (solo lectura) |
 | `BoardDeleteLog` | Registro append-only de tableros eliminados de forma permanente. `board_id` / `user_id` son enteros simples porque la fila `Board` ya no existe. Lo consume **solo** el endpoint de delta-sync de la keyboard API para que los clientes móviles sepan qué purgar |
+
+
+### Catálogo del área de clientes
+
+La cuenta FAM TEAM / raíz posee un board de sistema con `is_client_area=True`.
+Migrate lo crea con `boards.0009_seed_client_area_catalog_board` (vía `ensure_client_area_catalog_board`);
+`boards.0010_set_client_area_catalog_cover` asigna la portada por defecto desde
+`static/img/min_board.jpg` si falta. `python manage.py seed_client_area_board` sigue
+como fallback idempotente. Contiene las carpetas compartidas Nutrición / Deporte /
+Videoteca / Otros. Los asesores con derecho (`user_has_client_area`) lo ven en el
+home de boards como las plantillas raíz de landing; **no** pueden editarlo. El
+formulario de configuración del propietario solo muestra título, descripción y
+portada (visibilidad / compartición las fijan las reglas de entitlement). Sus
+archivos personales van en sus propios boards o en subidas de `ClientProgramFile`.
+El flag también:
+
+- lo excluye de la sincronización del teclado (`_get_accessible_board_ids`)
+- lo excluye de los límites de creación y del conteo de objetos en exceso
+  (`BOARDS_MODEL_KEY`)
+- restringe los tipos del mosaico a **carpeta**, **pdf** e **imagen**
 
 ### Lógica de acceso
 
@@ -68,7 +88,7 @@ los propietarios PRO ven la sección detrás del overlay de acceso restringido.
 | `services/bulk_operations.py` | Borrado, traslado y duplicación masivos con soporte de árbol de carpetas |
 | `services/mosaic_preview.py` | Genera y sincroniza miniaturas WebP de azulejos, incluidas previews de la primera página de PDF |
 | `services/landing_page_preview.py` | Resuelve URLs de preview y HTML embebido para elementos tipo `page` |
-| `services/board_cover.py` | Reprocesa la portada del tablero a WebP |
+| `services/board_cover.py` | Reprocesa la portada del tablero a WebP; asigna portadas por defecto desde static |
 | `services/item_titles.py` | Resuelve títulos de elementos desde fuentes externas (YouTube, metadatos de enlace) |
 | `services/voice_convert.py` | WebM → MP3 mediante ffmpeg; lanza `VoiceConversionError` |
 | `services/folder_options.py` | Opciones de carpeta para el desplegable legacy del modal de mover; el selector de destino carga carpetas bajo demanda desde el endpoint JSON del mosaico |

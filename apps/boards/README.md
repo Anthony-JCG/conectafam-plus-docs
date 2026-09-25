@@ -24,12 +24,30 @@ Relationship to the core apps:
 
 | Model | Responsibility |
 |---|---|
-| `Board` | User container: title, cover image, order, `share_token`, `allow_duplicate_on_share`, `is_public`. FK → `users.User` |
+| `Board` | User container: title, cover image, order, `share_token`, `allow_duplicate_on_share`, `is_public`, `is_client_area`. FK → `users.User` |
 | `BoardFolder` | Nestable folders (`parent` FK → self), sortable in the mosaic |
 | `BoardItem` | Mosaic element. Types: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`. Files up to 10 MB. Optional FK → `landing.LandingPage` |
 | `BoardCollaborator` | Invited user. PRO+ collaborators have read+edit access; Basic collaborators are view-only. Unique on `(board, user)` |
 | `BoardLibraryEntry` | Reference to a shared board saved into the user's own library (read-only) |
 | `BoardDeleteLog` | Append-only log of permanently deleted boards. `board_id` / `user_id` are plain integers because the `Board` row is already gone. Consumed **only** by the keyboard API delta-sync endpoint so mobile clients know what to purge |
+
+
+### Client-area catalog
+
+FAM TEAM / root owns a system board flagged `is_client_area=True`. Migrate creates
+it via `boards.0009_seed_client_area_catalog_board` (calls `ensure_client_area_catalog_board`);
+`boards.0010_set_client_area_catalog_cover` assigns the default cover from
+`static/img/min_board.jpg` when missing. `python manage.py seed_client_area_board`
+is an idempotent fallback. It holds the shared catalog folders Nutrición / Deporte /
+Videoteca / Otros. Entitled advisors (`user_has_client_area`) see it on the boards
+home like root landing templates; they **cannot** edit it. The owner settings form
+exposes only title, description, and cover (visibility / sharing are fixed by
+entitlement rules). Personal program files stay on the advisor's own boards or
+`ClientProgramFile` uploads. The flag also:
+
+- excludes the board from keyboard sync (`_get_accessible_board_ids`)
+- excludes it from `BOARDS_MODEL_KEY` create limits and excess-object counts
+- restricts mosaic item types to **folder**, **pdf**, and **image**
 
 ### Access logic
 
@@ -67,7 +85,7 @@ behind a restricted-access overlay.
 | `services/bulk_operations.py` | Bulk delete, move, and duplicate with folder-tree support |
 | `services/mosaic_preview.py` | Generates and syncs WebP tile thumbnails, including PDF first-page previews |
 | `services/landing_page_preview.py` | Resolves preview URLs and embedded HTML for `page`-type items |
-| `services/board_cover.py` | Reprocesses the board cover to WebP |
+| `services/board_cover.py` | Reprocesses the board cover to WebP; assigns default covers from static |
 | `services/item_titles.py` | Resolves item titles from external sources (YouTube, link metadata) |
 | `services/voice_convert.py` | WebM → MP3 through ffmpeg; raises `VoiceConversionError` |
 | `services/folder_options.py` | Folder options for the legacy move-modal dropdown; the destination picker loads folders on demand from the mosaic JSON endpoint |

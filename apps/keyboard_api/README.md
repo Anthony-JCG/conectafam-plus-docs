@@ -831,3 +831,5 @@ apps/boards/
 └── signals.py         # post_save / post_delete: touch Board.updated_at, log deletions,
                        # dispatch FCM tasks; collaborator/library entry hooks
 ```
+
+Boards with `is_client_area=True` are omitted from `_get_accessible_board_ids` and never sync to the mobile keyboard.

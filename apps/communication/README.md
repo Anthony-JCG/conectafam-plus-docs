@@ -40,8 +40,8 @@ API client.
 | Module | Responsibility |
 |---|---|
 | `services.py` | Persistence for scheduled tasks, activities, contacts, and predefined/follow-up messages; contact photo reprocessing |
-| `utils.py` | Contact filtering and ordering, serialisation, HTMX partial rendering, membership-status policy, permission helpers |
-| `const.py` | Session keys, pagination size, membership-status limits |
+| `utils.py` | Contact filtering and ordering (incl. program status), serialisation, HTMX partial rendering, membership-status policy, permission helpers |
+| `const.py` | Session keys (tags/interest/membership/program status), pagination size, membership-status limits |
 
 `signals.py` is registered from `apps.py`.
 
@@ -64,7 +64,9 @@ URL prefix: **`/communication/`**
 
 The contact modal **Área de cliente** tab is gated by `user_has_client_area`. Without entitlement
 it renders `RestrictedAccessAlert` `client_area_addon` and **Adquirir Herramienta** (add-on
-checkout, not `/pricing/` plan checkout).
+checkout, not `/pricing/` plan checkout). With entitlement, HTMX loads `load_client_area_pane`
+from `client_area`. List filters include session key `filter_program_status` (active/inactive
+program window via `ClientProgramAssignment`, not CRM `membership` / `ContactLabel`).
 
 Submitting templates: `components/modals/modal-contact.html` (`hx-get` + `hx-target`),
 `modal-sh-task.html` and `modal-activity-contact.html` (`hx-post` + `hx-target` + `data-close-modal`).
