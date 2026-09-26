@@ -79,7 +79,7 @@ Authorization: Token <token>
 
 ---
 
-## Endpoints (rama 1–2)
+## Endpoints (rama 1–3)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -92,6 +92,11 @@ Authorization: Token <token>
 | POST | /measurements/ | token + active | Create measurement (source=client) |
 | GET | /photos/ | token | Progress photo history |
 | POST | /photos/ | token + active | Multipart front/back/side (source=client) |
+| GET | /program/ | token + active | PDF slots (nutrition/sport/other) + product summary |
+| GET | /products/ | token | Nutritional products list |
+| GET | /products/<id>/ | token | Product detail (popup) |
+| GET | /academy/ | token + active | Lessons with drip unlock + todays_lesson |
+| GET | /academy/lessons/<id>/ | token + active | Lesson detail if unlocked |
 
 ### GET /me/
 
@@ -150,7 +155,39 @@ ecorded_on. Persists source=client. **201** { "measurement": {…} }.
 Multipart: at least one of ront / ack / side, optional 
 ecorded_on. Persists source=client. **201** { "photo": {…} } with absolute image URLs.
 
-Later ramas add program files, academy drip, continuity, and FCM.
+### GET /program/
+
+```json
+{
+  "program": { "day": 10, "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
+  "files": {
+    "nutrition": [{ "id": 1, "slot": "nutrition", "title": "plan.pdf", "file_url": "https://...", "assigned_on": "2026-09-25" }],
+    "sport": [],
+    "other": []
+  },
+  "products": [{ "id": 1, "name": "Omega 3", "observations": "...", "recorded_on": "2026-09-25", "image_url": "" }]
+}
+```
+
+### GET /academy/
+
+Drip: `unlocked` when `program_day >= unlock_day`. Mode `all` unlocks every lesson. Locked lesson detail returns **403**.
+
+```json
+{
+  "academy_enabled": true,
+  "unlock_mode": "drip",
+  "program_day": 10,
+  "todays_lesson": { "id": 3, "title": "Hoy", "unlock_day": 10, "order": 2, "unlocked": true, "video_url": "...", "video_file_url": "", "text": "Hoy", "attachment_url": "" },
+  "lessons": [
+    { "id": 1, "title": "Dia 1", "unlock_day": 1, "order": 0, "unlocked": true },
+    { "id": 2, "title": "Dia 20", "unlock_day": 20, "order": 1, "unlocked": false }
+  ],
+  "folders": [{ "id": 9, "title": "Videoteca" }]
+}
+```
+
+Later ramas add continuity and FCM.
 
 ---
 

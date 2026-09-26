@@ -79,7 +79,7 @@ Authorization: Token <token>
 
 ---
 
-## Endpoints (rama 1–2)
+## Endpoints (rama 1–3)
 
 | Método | Path | Auth | Descripción |
 |--------|------|------|-------------|
@@ -92,6 +92,11 @@ Authorization: Token <token>
 | POST | /measurements/ | token + activo | Alta de medida (source=client) |
 | GET | /photos/ | token | Historial de fotos de evolución |
 | POST | /photos/ | token + activo | Multipart frente/espalda/lado (source=client) |
+| GET | /program/ | token + activo | PDFs por slot (nutrition/sport/other) + resumen productos |
+| GET | /products/ | token | Lista de productos nutricionales |
+| GET | /products/<id>/ | token | Detalle de producto (popup) |
+| GET | /academy/ | token + activo | Lecciones con drip unlock + todays_lesson |
+| GET | /academy/lessons/<id>/ | token + activo | Detalle de lección si está desbloqueada |
 
 ### GET /me/
 
@@ -153,6 +158,14 @@ ecorded_on opcional. Persiste source=client. **201** { "photo": {…} } con URLs
 Ramas posteriores añaden archivos de programa, academia drip, continuidad y FCM.
 
 ---
+
+### GET /program/
+
+Slots `nutrition` / `sport` / `other` con URL absoluta del PDF y resumen de productos.
+
+### GET /academy/
+
+Modo `drip`: `unlocked` si `program_day >= unlock_day`. Modo `all`: todo desbloqueado. Detalle bloqueado → **403**.
 
 ## Errores
 
