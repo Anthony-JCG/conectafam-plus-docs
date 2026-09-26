@@ -98,6 +98,7 @@ Authorization: Token <token>
 | GET | /academy/ | token + active | Lessons with drip unlock + todays_lesson |
 | GET | /academy/lessons/<id>/ | token + active | Lesson detail if unlocked |
 | POST | /continuity/ | token | Continuity request (order + purchase date) |
+| POST | /auth/fcm-token/ | token + Firebase | Register device FCM token |
 
 ### GET /me/
 
@@ -207,7 +208,22 @@ Body: `order_number`, `purchase_date` (YYYY-MM-DD). Creates or refreshes pending
 }
 ```
 
-Later ramas add FCM.
+### POST /auth/fcm-token/
+
+Body: `{"fcm_token": "..."}`. Stores the FCM registration token on `ClientDeviceToken`.
+Requires Firebase Admin initialised (**503** otherwise). Call after login and on OS token rotation.
+
+### FCM events (client app)
+
+| event | When |
+|-------|------|
+| `client_weigh_reminder` | Celery beat daily; program day ∈ {6,13,20,27} (“weigh tomorrow”) |
+| `client_program_ending` | Celery beat daily; `days_remaining == 4` |
+
+Advisor: `POST /measurements/` also writes an ActivityContact note and web-pushes the advisor (`client_new_measurement`).
+
+Beat task: `client_api.tasks.send_client_reminders` (08:00).
+
 
 ---
 

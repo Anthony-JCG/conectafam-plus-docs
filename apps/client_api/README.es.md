@@ -98,6 +98,7 @@ Authorization: Token <token>
 | GET | /academy/ | token + activo | Lecciones con drip unlock + todays_lesson |
 | GET | /academy/lessons/<id>/ | token + activo | Detalle de lección si está desbloqueada |
 | POST | /continuity/ | token | Solicitud de continuidad (pedido + fecha) |
+| POST | /auth/fcm-token/ | token + Firebase | Registrar token FCM del dispositivo |
 
 ### GET /me/
 
@@ -162,7 +163,22 @@ Body: `order_number`, `purchase_date` (YYYY-MM-DD). Crea o actualiza `ClientAcce
 
 **201** incluye `advisor_whatsapp_url` (wa.me con texto) y `whatsapp_message`.
 
-Ramas posteriores anaden FCM.
+### POST /auth/fcm-token/
+
+Body: `{"fcm_token": "..."}`. Guarda el token FCM en `ClientDeviceToken`.
+Requiere Firebase Admin (**503** si no). Llamar tras login y al rotar el token.
+
+### Eventos FCM (app cliente)
+
+| event | Cuándo |
+|-------|--------|
+| `client_weigh_reminder` | Beat diario; día de programa ∈ {6,13,20,27} (“pesarse mañana”) |
+| `client_program_ending` | Beat diario; `days_remaining == 4` |
+
+Asesor: `POST /measurements/` crea ActivityContact + web push (`client_new_measurement`).
+
+Tarea beat: `client_api.tasks.send_client_reminders` (08:00).
+
 
 ---
 
