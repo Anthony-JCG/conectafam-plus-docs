@@ -79,21 +79,26 @@ Authorization: Token <token>
 
 ---
 
-## Endpoints (rama 1)
+## Endpoints (rama 1–2)
 
 | Método | Path | Auth | Descripción |
 |--------|------|------|-------------|
-| `POST` | `/auth/token/` | público + rate limit | Login por código de acceso |
-| `POST` | `/auth/token/refresh/` | token | Rotar token |
-| `POST` | `/auth/logout/` | token | Borrar token del dispositivo |
-| `GET` | `/me/` | token | Perfil básico + resumen de programa |
+| POST | /auth/token/ | público + rate limit | Login por código de acceso |
+| POST | /auth/token/refresh/ | token | Rotar token |
+| POST | /auth/logout/ | token | Borrar token del dispositivo |
+| GET | /me/ | token | Perfil básico + resumen de programa |
+| GET | /home/ | token + activo | Saludo, métricas actuales, deltas semanales, WhatsApp asesor |
+| GET | /measurements/ | token | Historial de medidas (gráficas) |
+| POST | /measurements/ | token + activo | Alta de medida (source=client) |
+| GET | /photos/ | token | Historial de fotos de evolución |
+| POST | /photos/ | token + activo | Multipart frente/espalda/lado (source=client) |
 
-### `GET /me/`
+### GET /me/
 
-```json
+`json
 {
   "client_profile_id": 1,
-  "name": "María Castillo",
+  "name": "Maria Castillo",
   "access_status": "active",
   "access_code": "ABCD2345",
   "program": {
@@ -106,9 +111,46 @@ Authorization: Token <token>
   },
   "program_finished": false
 }
-```
+`
 
-Ramas posteriores añaden progreso, archivos de programa, academia, continuidad y FCM.
+### GET /home/
+
+`json
+{
+  "greeting_name": "Maria Castillo",
+  "access_status": "active",
+  "program": { "day": 10, "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
+  "current": {
+    "id": 12,
+    "recorded_on": "2026-09-25",
+    "weight": 72.0,
+    "waist": 82.0,
+    "chest": null,
+    "hip": null,
+    "arm": null,
+    "leg": null,
+    "bioimpedance": { "body_fat_pct": 20.0, "muscle_mass_kg": 31.0 },
+    "source": "client",
+    "created_at": "2026-09-25T18:00:00+00:00"
+  },
+  "weekly_deltas": { "weight": -2.0, "waist": -2.0, "chest": null, "hip": null, "arm": null, "leg": null },
+  "advisor_whatsapp_url": "https://wa.me/593999111222"
+}
+`
+
+Bioimpedancia / calorías diarias: v1 acepta ioimpedance JSON opcional desde la app; las cards vacías se omiten en el cliente. Sin fórmulas de báscula en servidor todavía.
+
+### POST /measurements/
+
+Body JSON: weight, waist, chest, hip, rm, leg, ioimpedance opcional, 
+ecorded_on opcional. Persiste source=client. **201** { "measurement": {…} }.
+
+### POST /photos/
+
+Multipart: al menos una de ront / ack / side, 
+ecorded_on opcional. Persiste source=client. **201** { "photo": {…} } con URLs absolutas.
+
+Ramas posteriores añaden archivos de programa, academia drip, continuidad y FCM.
 
 ---
 
