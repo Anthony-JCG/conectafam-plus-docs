@@ -28,7 +28,7 @@ Relationship to the core apps:
 | `ClientLesson` | FK → assignment; copy of plan item content + `unlock_day`. |
 | `ClientMeasurement` | FK → profile; body metrics; `source=client\|advisor`. Advisor must not delete `source=client`. |
 | `ClientProgressPhoto` | FK → profile; front/back/side. |
-| `ClientAccessRequest` | FK → profile; first access or continuity. |
+| `ClientAccessRequest` | FK → profile; first access or continuity; optional `order_number` / `purchase_date`. |
 
 ### Services
 

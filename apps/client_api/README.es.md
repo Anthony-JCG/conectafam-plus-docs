@@ -79,7 +79,7 @@ Authorization: Token <token>
 
 ---
 
-## Endpoints (rama 1–3)
+## Endpoints (rama 1-4)
 
 | Método | Path | Auth | Descripción |
 |--------|------|------|-------------|
@@ -97,6 +97,7 @@ Authorization: Token <token>
 | GET | /products/<id>/ | token | Detalle de producto (popup) |
 | GET | /academy/ | token + activo | Lecciones con drip unlock + todays_lesson |
 | GET | /academy/lessons/<id>/ | token + activo | Detalle de lección si está desbloqueada |
+| POST | /continuity/ | token | Solicitud de continuidad (pedido + fecha) |
 
 ### GET /me/
 
@@ -155,7 +156,13 @@ ecorded_on opcional. Persiste source=client. **201** { "measurement": {…} }.
 Multipart: al menos una de ront / ack / side, 
 ecorded_on opcional. Persiste source=client. **201** { "photo": {…} } con URLs absolutas.
 
-Ramas posteriores añaden archivos de programa, academia drip, continuidad y FCM.
+### POST /continuity/
+
+Body: `order_number`, `purchase_date` (YYYY-MM-DD). Crea o actualiza `ClientAccessRequest(kind=continuity)` pendiente, notifica al asesor (ActivityContact + web push) y aparece en el inbox. No exige acceso activo.
+
+**201** incluye `advisor_whatsapp_url` (wa.me con texto) y `whatsapp_message`.
+
+Ramas posteriores anaden FCM.
 
 ---
 

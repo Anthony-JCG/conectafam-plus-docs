@@ -28,7 +28,7 @@ Relación con las apps núcleo:
 | `ClientLesson` | FK → asignación; copia del ítem de plan + `unlock_day`. |
 | `ClientMeasurement` | FK → perfil; métricas; `source=client\|advisor`. El asesor no borra `source=client`. |
 | `ClientProgressPhoto` | FK → perfil; frente/espalda/lado. |
-| `ClientAccessRequest` | FK → perfil; primer acceso o continuidad. |
+| `ClientAccessRequest` | FK → perfil; primer acceso o continuidad; `order_number` / `purchase_date` opcionales. |
 
 ### Servicios
 

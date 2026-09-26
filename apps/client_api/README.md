@@ -79,7 +79,7 @@ Authorization: Token <token>
 
 ---
 
-## Endpoints (rama 1–3)
+## Endpoints (rama 1–4)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -97,6 +97,7 @@ Authorization: Token <token>
 | GET | /products/<id>/ | token | Product detail (popup) |
 | GET | /academy/ | token + active | Lessons with drip unlock + todays_lesson |
 | GET | /academy/lessons/<id>/ | token + active | Lesson detail if unlocked |
+| POST | /continuity/ | token | Continuity request (order + purchase date) |
 
 ### GET /me/
 
@@ -187,7 +188,26 @@ Drip: `unlocked` when `program_day >= unlock_day`. Mode `all` unlocks every less
 }
 ```
 
-Later ramas add continuity and FCM.
+### POST /continuity/
+
+Body: `order_number`, `purchase_date` (YYYY-MM-DD). Creates or refreshes pending `ClientAccessRequest(kind=continuity)`, notifies advisor (ActivityContact + web push), visible in advisor inbox. Does **not** require active access (typical after program end).
+
+**201** example:
+
+```json
+{
+  "request_id": 5,
+  "kind": "continuity",
+  "status": "pending",
+  "order_number": "ORD-42",
+  "purchase_date": "2026-09-20",
+  "access_status": "pending",
+  "advisor_whatsapp_url": "https://wa.me/593999111222?text=...",
+  "whatsapp_message": "Hola, quiero continuar mi programa Fam Fit. Pedido: ORD-42. Fecha de compra: 2026-09-20."
+}
+```
+
+Later ramas add FCM.
 
 ---
 
