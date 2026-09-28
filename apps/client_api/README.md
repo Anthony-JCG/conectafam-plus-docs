@@ -30,7 +30,8 @@ exposes the native HTTP contract.
 | Environment | Base |
 |-------------|------|
 | Local       | `http://localhost:8000/api/client/` |
-| Staging / Prod | `https://<host>/api/client/` |
+| Debug       | `https://debug.<host>/api/client/` |
+| Prod        | `https://<host>/api/client/` |
 
 ---
 
