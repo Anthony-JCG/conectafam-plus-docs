@@ -77,12 +77,14 @@ nav:
       - training: apps/training/index.md
       - challenge: apps/challenge/index.md
       - communication: apps/communication/index.md
+      - client_area: apps/client_area/index.md
       - boards: apps/boards/index.md
       - landing: apps/landing/index.md
       - links: apps/links/index.md
       - streaming: apps/streaming/index.md
       - pricing: apps/pricing/index.md
       - keyboard_api: apps/keyboard_api/index.md
+      - client_api: apps/client_api/index.md
   - Infrastructure:
       - Overview: infrastructure/index.md
       - Docker: infrastructure/docker.md

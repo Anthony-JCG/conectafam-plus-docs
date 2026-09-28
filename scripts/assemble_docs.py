@@ -34,12 +34,14 @@ APPS = (
     "training",
     "challenge",
     "communication",
+    "client_area",
     "boards",
     "landing",
     "links",
     "streaming",
     "pricing",
     "keyboard_api",
+    "client_api",
 )
 
 INFRA_FILES = (
