@@ -102,7 +102,7 @@ en Mi Equipo, `modal-new-user.html`, `modal-delete-invitation.html`,
 
 | URL | Name | Descripción |
 |---|---|---|
-| `home/` | `home` | Dashboard: tareas programadas, incentivos, calendario, retos |
+| `home/` | `home` | Dashboard: tareas programadas, bloque de solicitudes del área de clientes (ver el README de `client_area`), incentivos, calendario, retos |
 | `my-team/` | `my_team` | Árbol de equipo, invitaciones, pasos de ruta |
 | `personal-info/` | `personal_info` | Formulario de perfil |
 | `save-incentive/` · `delete-incentive/` | `save_incentive`, `delete_incentive` | CRUD de incentivos con adjuntos |

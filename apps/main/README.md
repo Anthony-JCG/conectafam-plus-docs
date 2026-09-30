@@ -98,7 +98,7 @@ My Team, `modal-new-user.html`, `modal-delete-invitation.html`, `modal-resend-in
 
 | URL | Name | Description |
 |---|---|---|
-| `home/` | `home` | Dashboard: scheduled tasks, incentives, calendar, challenges |
+| `home/` | `home` | Dashboard: scheduled tasks, client-area requests block (see the `client_area` README), incentives, calendar, challenges |
 | `my-team/` | `my_team` | Team tree, invitations, route steps |
 | `personal-info/` | `personal_info` | Profile form |
 | `save-incentive/` · `delete-incentive/` | `save_incentive`, `delete_incentive` | Incentive CRUD with attachments |

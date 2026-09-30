@@ -68,6 +68,13 @@ La pestaña **Área de cliente** del modal se abre con `user_has_client_area`. S
 `RestrictedAccessAlert` `client_area_addon` y **Adquirir Herramienta** (checkout del add-on, no
 el de planes en `/pricing/`). Con entitlement, HTMX carga `load_client_area_pane`. El filtro de sesión `filter_program_status` usa el programa activo/inactivo (no `membership` del CRM).
 
+El botón **Eliminar contacto** del pie del modal (`#btnDeleteContact`) solo aparece en la pestaña **Datos**
+(`contacts_detail.js` lo oculta en Tareas, Actividad y Área de cliente). Su confirmación
+(`modal-delete-confirm.html` con `delete_message`) avisa de que se borra también todo lo que cuelga del
+`Contact`: tareas programadas, actividades y notas, mensajes de seguimiento personalizados y el área de
+cliente (`ClientProfile`: acceso a la app y tokens de dispositivo, programas con sus archivos, productos y
+academia, mediciones, fotos y solicitudes de acceso). Si hay un `users.User` enlazado, solo pierde el enlace
+(`SET_NULL`).
 
 Plantillas de envío: `components/modals/modal-contact.html` (`hx-get` + `hx-target`),
 `modal-sh-task.html` y `modal-activity-contact.html` (`hx-post` + `hx-target` + `data-close-modal`).

@@ -68,6 +68,13 @@ checkout, not `/pricing/` plan checkout). With entitlement, HTMX loads `load_cli
 from `client_area`. List filters include session key `filter_program_status` (active/inactive
 program window via `ClientProgramAssignment`, not CRM `membership` / `ContactLabel`).
 
+The modal footer's **Eliminar contacto** button (`#btnDeleteContact`) only shows on the **Datos** tab
+(`contacts_detail.js` hides it on Tareas, Actividad and Área de cliente). Its confirmation
+(`modal-delete-confirm.html` with `delete_message`) warns that everything that cascades from `Contact`
+goes too: scheduled tasks, activities/notes, customised follow-up messages and the client area
+(`ClientProfile`: app access and device tokens, programs with their files, products and academy,
+measurements, photos, access requests). A linked `users.User` only loses the link (`SET_NULL`).
+
 Submitting templates: `components/modals/modal-contact.html` (`hx-get` + `hx-target`),
 `modal-sh-task.html` and `modal-activity-contact.html` (`hx-post` + `hx-target` + `data-close-modal`).
 The message and WhatsApp-link modals in `messages.html` are driven by the global

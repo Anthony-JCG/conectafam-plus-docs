@@ -25,29 +25,128 @@ Relationship to the core apps:
 | Model | Responsibility |
 |---|---|
 | `Board` | User container: title, cover image, order, `share_token`, `allow_duplicate_on_share`, `is_public`, `is_client_area`. FK → `users.User` |
-| `BoardFolder` | Nestable folders (`parent` FK → self), sortable in the mosaic |
+| `BoardFolder` | Nestable folders (`parent` FK → self), sortable in the mosaic. Optional `catalog_folder` FK → `BoardFolder` for client-area shadow folders |
 | `BoardItem` | Mosaic element. Types: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`. Files up to 10 MB. Optional FK → `landing.LandingPage` |
 | `BoardCollaborator` | Invited user. PRO+ collaborators have read+edit access; Basic collaborators are view-only. Unique on `(board, user)` |
 | `BoardLibraryEntry` | Reference to a shared board saved into the user's own library (read-only) |
 | `BoardDeleteLog` | Append-only log of permanently deleted boards. `board_id` / `user_id` are plain integers because the `Board` row is already gone. Consumed **only** by the keyboard API delta-sync endpoint so mobile clients know what to purge |
 
+### Client-area boards
 
-### Client-area catalog
+Two boards carry `is_client_area=True`; an advisor only ever sees **one**, "Área de clientes":
 
-FAM TEAM / root owns a system board flagged `is_client_area=True`. Migrate creates
-it via `boards.0009_seed_client_area_catalog_board` (calls `ensure_client_area_catalog_board`);
-`boards.0010_set_client_area_catalog_cover` assigns the default cover from
-`static/img/min_board.jpg` when missing. `python manage.py seed_client_area_board`
-is an idempotent fallback. It holds the shared catalog folders Nutrición / Deporte /
-Videoteca / Otros. Entitled advisors (`user_has_client_area`) see it on the boards
-home like root landing templates; they **cannot** edit it. The owner settings form
-exposes only title, description, and cover (visibility / sharing are fixed by
-entitlement rules). Personal program files stay on the advisor's own boards or
-`ClientProgramFile` uploads. The flag also:
+| Board | Owner | Allowed item types | Created by |
+|---|---|---|---|
+| System catalog (`CLIENT_AREA_CATALOG_TITLE`, folders Nutrición / Deporte / Videoteca / Otros) | FAM TEAM / `USER_ROOT` | PDF, image (`CLIENT_AREA_CATALOG_ITEM_TYPES`); Videoteca also uploaded video and YouTube (`CLIENT_AREA_CATALOG_FOLDER_EXTRA_ITEM_TYPES`) | Migrations `0009` / `0010`; `manage.py seed_client_area_board` (idempotent) |
+| Own client-area board ("Área de clientes", `CLIENT_AREA_OWN_BOARD_TITLE`) | Each entitled advisor, private | Folders, text, image, PDF, uploaded video, YouTube (`CLIENT_AREA_OWN_ITEM_TYPES`) | `client_area_catalog.ensure_user_client_area_board` on first use (boards home, client-area pane) |
 
-- excludes the board from keyboard sync (`_get_accessible_board_ids`)
-- excludes it from `BOARDS_MODEL_KEY` create limits and excess-object counts
-- restricts mosaic item types to **folder**, **pdf**, and **image**
+Only `USER_ROOT` edits the catalog, and `USER_ROOT` sees nothing else. Advisors manage their own
+board with the regular board views.
+
+#### Merged view
+
+The own board is the advisor's single entry point (boards home, search, client-area picker).
+`client_area_catalog.get_merged_catalog_board(user, board)` returns the catalog when `board` is the
+user's own client-area board, and the view merges both:
+
+| Location | Tiles |
+|---|---|
+| Board root | Only the catalog folders (read-only) |
+| Catalog folder | Root's tiles (read-only), then the tiles of the advisor's shadow folder |
+| Own folder | Own tiles |
+
+- `utils.build_view_mosaic_tiles` adds `read_only: true` to catalog tiles *after* reading the
+  cache. Each underlying board keeps its own mosaic Redis entry (board/folder), so the cache never
+  holds per-user data.
+- `utils.find_view_folder` / `utils.get_view_item` resolve catalog folders and items under the own
+  board URL (`board_folder`, `board_mosaic_data`, `board_item_tile`). Files are still served by
+  `board_item_file` on the catalog board (tiles carry its URL).
+- `board_detail` on the catalog redirects an advisor to their own board (same folder and query
+  string, e.g. `open_item` from search). The search index lists catalog folders and items as
+  read-only tiles, but no catalog board entry.
+- `mosaic.js` doesn't drag or select read-only tiles (the client-area picker still selects them)
+  and leaves them out of the reorder payload; `item-viewer.js` hides edit, move and delete for
+  them.
+
+#### Root lock
+
+Nothing is added at the root of a client-area board, neither by root nor by advisors: its root
+only holds the catalog folders (Nutrición / Deporte / Videoteca / Otros), and content goes inside
+them (or their subfolders).
+
+- UI: `utils.build_board_detail_context` sets `can_add`, so `board-detail.html` hides "Añadir" at
+  the root; `folder_options` has no "Raíz del board" entry on these boards.
+- Server: `client_area_root_locked(board, folder)` makes `save_board_folder` (create),
+  `save_board_item` (create), `move_board_item` and bulk move answer
+  `CLIENT_AREA_ROOT_LOCKED_MESSAGE` when the target folder is the root. Edits keep the item's
+  folder.
+- The allowed item types depend on the folder: `client_area_root_folder(folder)` walks up to the
+  root folder (a shadow folder maps to its catalog folder) and `client_area_item_types(board,
+  folder)` adds its `CLIENT_AREA_CATALOG_FOLDER_EXTRA_ITEM_TYPES`. `item-modal.js` sends
+  `folder_id` to `load_board_item_form` so the type menu matches the folder.
+
+Own top-level folders created before this rule are no longer valid; migration `0012` moves loose
+root content into Otros.
+
+#### Shadow folders
+
+Advisors can add items and subfolders inside root's folders; the catalog folder itself stays
+read-only (no rename or delete: `is_catalog_folder` hides those actions).
+
+- The content lives in a *shadow folder* of the own board: `BoardFolder.catalog_folder` (nullable
+  FK, one per board and catalog folder) points at the catalog folder.
+- `client_area_catalog.ensure_shadow_folder` creates it on the first write, through
+  `utils.find_write_folder` / `get_write_folder` (used by `save_board_item`, `save_board_folder`,
+  `move_board_item` and bulk move): a catalog folder id sent to the own board maps to its shadow.
+- Shadow folders sit at the own board root, which the merged view never lists (it shows only the
+  catalog folders). Opening one by id shows its catalog folder, move options label it with the
+  catalog title, and the search index lists its items (URL `board_folder(own, shadow)`) without a
+  folder entry of its own.
+- If root deletes the catalog folder, `SET_NULL` turns the shadow into a regular folder, so nothing
+  is lost.
+
+Writes stay scoped to the board in the URL: save, delete, move, reorder and bulk actions look items
+and folders up with `board=board`, so a catalog item id sent through the own board is a 404 or is
+ignored. Items never move between the two boards.
+
+Two boards behind one view, rather than an owner per item, because every board service (mosaic
+cache, search index, `board_item_file`, bulk operations, reorder) is scoped by board: a private
+board reuses the whole item CRUD with one nullable FK and no per-item ownership checks, and merging
+only happens when reading.
+
+#### Permissions
+
+All in `services/board_permissions.py`; entitlement is `user_levels`
+`check_action_allowed(CLIENT_AREA_MODEL_KEY, ACCESS_ACTION_KEY)` or the `client_area` add-on.
+
+| Function | Rule |
+|---|---|
+| `user_can_view_client_area_board` | Own board, or the system catalog while entitled; never another advisor's board. Library entries, collaborators and share links never apply (`board_share`, `save_shared_board` and `resolve_board_read_access` ignore client-area boards) |
+| `user_can_manage_board_collaborators` | Always `False` for client-area boards |
+| `user_can_edit_board` | Owner only: `USER_ROOT` for the catalog, the entitled advisor for their own board |
+| `user_may_write_board_content` | Skips the plan write routes for client-area boards; `RouteLevelAccessMiddleware` (`CLIENT_AREA_BOARD_WRITE_ROUTES`) lets a Basic user with the add-on use them on their own board only |
+| `get_client_area_catalog_boards_queryset(user)` | System catalog first, then the own board. Used by the search index and the client-area picker search and forms |
+| `client_area_item_types(board, folder)` / `board_allows_item_type` / `require_client_area_item_type` | Allowed types per board and root folder (Videoteca adds video and YouTube); also drive the "Añadir" menu (`client_area_add_menu(board, folder)`) and `load_board_item_form` |
+| `client_area_root_locked(board, folder)` | `True` at the root of a client-area board: no folder or item can be created or moved there |
+
+The owner settings form exposes only title, description and cover; client-area boards cannot be
+deleted from the UI (`delete_board` / `save_board` skip them). The flag also excludes them from
+keyboard sync (`_get_accessible_board_ids`) and from `BOARDS_MODEL_KEY` create limits and
+excess-object counts.
+
+#### Migrations
+
+| Migration | Change |
+|---|---|
+| `0009_seed_client_area_catalog_board` | Creates the catalog board and its folders for `USER_ROOT` if missing |
+| `0010_set_client_area_catalog_cover` | Sets the default cover (`static/img/min_board.jpg`, stored as-is, no WebP) when the catalog has none |
+| `0011_boardfolder_catalog_folder` | Adds `BoardFolder.catalog_folder` (shadow folders) |
+| `0012_client_area_root_folders_only` | Data: creates any missing catalog root folder (Nutrición / Deporte / Videoteca / Otros) and moves folders and items at the root of a client-area board into Otros (the catalog's own folder, or the advisor's shadow folder of it) |
+
+`0009`, `0010` and `0012` only use historical models (`apps.get_model`), so `0011` and later schema changes
+apply cleanly after them on a fresh database. Both skip with a warning when `USER_ROOT` (or the
+catalog board) doesn't exist yet; `seed_client_area_board` creates it later. `0010` fails if the
+static cover is missing.
 
 ### Access logic
 
@@ -89,6 +188,8 @@ behind a restricted-access overlay.
 | `services/item_titles.py` | Resolves item titles from external sources (YouTube, link metadata) |
 | `services/voice_convert.py` | WebM → MP3 through ffmpeg; raises `VoiceConversionError` |
 | `services/folder_options.py` | Folder options for the legacy move-modal dropdown; the destination picker loads folders on demand from the mosaic JSON endpoint |
+| `services/client_area_catalog.py` | Client-area boards: ensure catalog / own board, merged catalog lookup, shadow folders |
+| `services/client_area_uploads.py` | Content uploaded from the client-area pane becomes a board item: `get_client_area_upload_folder(user, root_title, subfolder_title)` (catalog folder for `USER_ROOT`, the shadow folder for an advisor; subfolder created on first use) and `create_client_area_item(folder, uploaded_file=, youtube_url=)` |
 | `services/keyboard_sync.py` | Touches `updated_at` and enqueues the mobile-sync Celery task |
 | `utils.py` | Board access resolution, mosaic payload, reordering, detail context |
 | `link_meta.py`, `youtube.py` | Outbound fetches for Open Graph previews and YouTube oEmbed |

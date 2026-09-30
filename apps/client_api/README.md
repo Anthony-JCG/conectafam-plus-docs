@@ -20,8 +20,9 @@ Django session / CSRF         ClientDeviceToken (device_id + hex token)
 client_area HTMX pane         Authorization: Token <hex64>
 ```
 
-Domain models and business rules live in `apps/client_area`. This app only
-exposes the native HTTP contract.
+Domain models and business rules live in [`apps/client_area`](../client_area/README.md). This app
+only exposes the native HTTP contract. Every endpoint reads live from the database; the only cache
+is the login rate limit.
 
 ---
 
@@ -43,36 +44,33 @@ exposes the native HTTP contract.
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `access_code` | yes | Advisor-issued code on `ClientProfile` |
+| `access_code` | yes | Advisor-issued code on `ClientProfile` (case-insensitive) |
 | `device_id` | yes | Stable UUID from the device |
 | `device_name` | no | Human-readable label |
 
-**200** — access active:
+| Status | Description | Body |
+|---|---|---|
+| `200` | Access active | `{"token": "<64 hex>", "client_profile_id": 1, "access_status": "active", "name": "María Castillo"}` |
+| `400` | Invalid JSON, missing `device_id` or `access_code` | `{"error": "..."}` |
+| `401` | Unknown code (counts toward the IP rate limit: 10 / 10 minutes) | `{"error": "Invalid access code."}` |
+| `403` | Code valid, access not active; ensures one pending `first_access` request | `{"error": "Access is not active.", "access_status": "pending", "client_profile_id": 1}` |
+| `429` | Rate limited | `{"error": "Too many failed attempts. Try again later."}` |
 
-```json
-{
-  "token": "<64 hex chars>",
-  "client_profile_id": 1,
-  "access_status": "active",
-  "name": "María Castillo"
-}
-```
+### Access lifecycle
 
-**403** — code valid but access not active (`pending` / `deactivated` / was `none`).
-May create an idempotent `ClientAccessRequest(kind=first_access)`.
-
-**401** — unknown code (counts toward IP rate limit: 10 / 10 minutes).
-
-**Access lifecycle** (`ClientProfile.access_status`, set from the advisor web pane):
+`ClientProfile.access_status`, driven by the advisor's web pane and the program lifecycle:
 
 | Event | `access_status` |
 |-------|-----------------|
 | Login with a valid code while not active | `none` → `pending` + `ClientAccessRequest(first_access)` |
-| Advisor accepts the request, turns access on, or activates the program (Progreso → Activar accepts pending requests) | `active` |
+| `POST /continuity/` | `none` → `pending` + `ClientAccessRequest(continuity)` |
+| Advisor accepts the request, turns access on, or activates the program (pending requests are accepted) | `active` |
 | Advisor turns access off | `deactivated` |
-| Advisor deactivates the program, or the daily expiry job ends it | `none` ("Sin acceso"); the next login creates a new request |
+| Program ends: advisor deactivates it, the daily expiry job ends it, or the advisor's client-area add-on lapses | `none` ("Sin acceso"); the next login creates a new request |
 
-**429** — rate limited.
+Device tokens are not revoked when access changes: authenticated calls keep returning **200** on
+the token-only endpoints and **403** `{"error": "Access is not active.", "access_status": "..."}`
+on the ones that require active access.
 
 ### Authenticated requests
 
@@ -80,41 +78,115 @@ May create an idempotent `ClientAccessRequest(kind=first_access)`.
 Authorization: Token <token>
 ```
 
+Missing header → **401** `{"error": "Authentication required."}`; unknown token → **401**
+`{"error": "Invalid or expired token."}`.
+
 ### Refresh / logout
 
-| Method | Path | Notes |
-|--------|------|-------|
-| `POST` | `/auth/token/refresh/` | Rotates token; old value invalid immediately |
-| `POST` | `/auth/logout/` | Deletes this device token |
+| Method | Path | Response |
+|--------|------|----------|
+| `POST` | `/auth/token/refresh/` | **200** same body as login; the old token is invalid immediately |
+| `POST` | `/auth/logout/` | **200** `{"status": "ok"}`; deletes this device token |
 
 ---
 
-## Endpoints (rama 1–4)
+## Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | /auth/token/ | public + rate limit | Login by access code |
-| POST | /auth/token/refresh/ | token | Rotate token |
-| POST | /auth/logout/ | token | Delete device token |
-| GET | /me/ | token | Basic profile + program summary |
-| GET | /home/ | token + active | Greeting, current metrics, weekly deltas, advisor WhatsApp |
-| GET | /measurements/ | token | Measurement history (charts) |
-| POST | /measurements/ | token + active | Create measurement (source=client) |
-| GET | /photos/ | token | Progress photo history |
-| POST | /photos/ | token + active | Multipart front/back/side (source=client) |
-| GET | /program/ | token + active | PDF slots (nutrition/sport/other) + product summary |
-| GET | /products/ | token | Nutritional products list |
-| GET | /products/<id>/ | token | Product detail (popup) |
-| GET | /academy/ | token + active | Lessons with drip unlock + todays_lesson |
-| GET | /academy/lessons/<id>/ | token + active | Lesson detail if unlocked |
-| POST | /continuity/ | token | Continuity request (order + purchase date) |
-| POST | /auth/fcm-token/ | token + Firebase | Register device FCM token |
+| POST | `/auth/token/` | public + rate limit | Login by access code |
+| POST | `/auth/token/refresh/` | token | Rotate token |
+| POST | `/auth/logout/` | token | Delete device token |
+| POST | `/auth/fcm-token/` | token + Firebase | Register device FCM token |
+| GET | `/me/` | token | Basic profile + program summary |
+| GET | `/home/` | token + active | Greeting, current metrics, weekly deltas, advisor WhatsApp |
+| GET | `/measurements/` | token | Measurement history (charts) |
+| POST | `/measurements/` | token + active | Create measurement (`source=client`) |
+| GET | `/photos/` | token | Progress photo history |
+| POST | `/photos/` | token + active | Multipart front/back/side (`source=client`) |
+| GET | `/program/` | token + active | Files by slot (nutrition/sport/other) + products |
+| GET | `/products/` | token | Products of the active program |
+| GET | `/products/<id>/` | token | Product detail (popup) |
+| GET | `/academy/` | token + active | Programas formativos with their lessons (per-lesson availability) + `todays_lesson` |
+| GET | `/academy/lessons/<id>/` | token + active | Lesson detail if unlocked |
+| POST | `/continuity/` | token | Continuity request (order + purchase date) |
 
-### Program block
+Unexpected errors return **500** `{"error": "Internal server error."}` on every endpoint.
 
-`program` in `/me/`, `/home/` and `/program/` describes the active assignment. The advisor sets `start_date` and
-`duration_days`; `end_date` is always `start_date + duration_days` (derived, never stored or editable). `day` is the
-1-based program day, `progress_percent` 0–100, `days_remaining` until `end_date`.
+---
+
+## Data Structures
+
+### Program
+
+`program` in `/me/`, `/home/` and `/program/` describes the active assignment, or is `null` when
+there is none.
+
+```json
+{
+  "day": 10,
+  "start_date": "2026-09-02",
+  "duration_days": 90,
+  "end_date": "2026-12-01",
+  "progress_percent": 11,
+  "days_remaining": 80,
+  "is_active": true
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `day` | int | 1-based program day (`1` before the start date) |
+| `start_date` | `YYYY-MM-DD` | Set by the advisor; can still be moved after activation |
+| `duration_days` | int | Set by the advisor; fixed once the program is activated |
+| `end_date` | `YYYY-MM-DD` | Always `start_date + duration_days` (derived, never stored) |
+| `progress_percent` | int | 0–100 |
+| `days_remaining` | int | Days until `end_date` |
+| `is_active` | bool | Inside the program window and not deactivated |
+
+### Product
+
+```json
+{ "id": 1, "name": "Omega 3", "observations": "1 cápsula al día", "recorded_on": "2026-09-25" }
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | int | |
+| `name` | string | Products text entered by the advisor |
+| `observations` | string | `""` when empty |
+| `recorded_on` | `YYYY-MM-DD` | Date set by the advisor |
+
+Products are plain text rows with no image or board item. Edits and deletes in the pane show up on
+the next request.
+
+### Lesson
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | int | |
+| `program_id` | int | Id of its programa formativo (`programs[].id` in `/academy/`) |
+| `title` | string | Board item title, else the first 80 chars of the text, else the attachment title, else `Lesson <id>` |
+| `unlock_day` | int | `0` = always available ("Siempre"); `N >= 1` = available from program day `N` ("Día N") |
+| `order` | int | Display order inside its program; sort by it |
+| `unlocked` | bool | `unlock_day == 0`, or `program_day >= unlock_day` |
+
+Detail payloads (`todays_lesson`, `/academy/lessons/<id>/`) add `video_url`, `video_file_url`,
+`text` and `attachment_url` (strings, `""` when empty). The content of a lesson is always a board
+item of the advisor's client-area board (uploads from the pane are stored there first): `text` is
+the lesson text, `attachment_url` the file of its attachment item, and the content item fills the
+key of its type when it is still empty:
+
+| Item type | Key |
+|---|---|
+| YouTube | `video_url` |
+| Uploaded video | `video_file_url` |
+| Text | `text` |
+| PDF, image | `attachment_url` |
+
+---
+
+## Endpoint Details
 
 ### GET /me/
 
@@ -124,18 +196,14 @@ Authorization: Token <token>
   "name": "Maria Castillo",
   "access_status": "active",
   "access_code": "ABCD2345",
-  "program": {
-    "day": 10,
-    "start_date": "2026-09-02",
-    "duration_days": 90,
-    "end_date": "2026-12-01",
-    "progress_percent": 11,
-    "days_remaining": 80,
-    "is_active": true
-  },
+  "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "program_finished": false
 }
 ```
+
+`program_finished` is `true` when access is `active` but there is no active program. Once a program
+ends, access goes back to `none`, so the response has `access_status: "none"`, `program: null` and
+`program_finished: false`; the app offers `POST /continuity/`.
 
 ### GET /home/
 
@@ -162,15 +230,24 @@ Authorization: Token <token>
 }
 ```
 
-Bioimpedance / daily calories: v1 accepts optional `bioimpedance` JSON from the app; empty cards are omitted client-side. No server-side scale formulas yet.
+`current` is the latest measurement (`null` without one); `weekly_deltas` compares the two latest
+(`null` with fewer than two). The app accepts an optional `bioimpedance` object; empty cards are
+omitted client-side and there are no server-side scale formulas.
 
-### POST /measurements/
+### GET · POST /measurements/
 
-JSON body: weight, waist, chest, hip, `arm`, leg, optional `bioimpedance` object, optional `recorded_on`. Persists source=client. **201** { "measurement": {…} }.
+- **GET** → **200** `{"measurements": [Measurement, ...]}`, newest first.
+- **POST** JSON: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`, optional `bioimpedance`, optional
+  `recorded_on` (defaults to today). Stored with `source=client`; the advisor gets an
+  `ActivityContact` note and a web push. **201** `{"measurement": {...}}`, **400** on validation.
 
-### POST /photos/
+### GET · POST /photos/
 
-Multipart: at least one of `front` / `back` / side, optional `recorded_on`. Persists source=client. **201** { "photo": {…} } with absolute image URLs.
+- **GET** → **200** `{"photos": [{"id", "recorded_on", "front_url", "back_url", "side_url", "source", "created_at"}]}`.
+- **POST** multipart: at least one of `front` / `back` / `side`, optional `recorded_on`. Stored with
+  `source=client`. **201** `{"photo": {...}}` with absolute URLs, **400** without images.
+
+Rows the advisor deletes in the web pane are only hidden there; both lists keep returning them.
 
 ### GET /program/
 
@@ -182,35 +259,81 @@ Multipart: at least one of `front` / `back` / side, optional `recorded_on`. Pers
     "sport": [],
     "other": []
   },
-  "products": [{ "id": 1, "name": "Omega 3", "observations": "...", "recorded_on": "2026-09-25", "image_url": "" }]
+  "products": [{ "id": 1, "name": "Omega 3", "observations": "...", "recorded_on": "2026-09-25" }]
 }
 ```
 
-### GET /academy/
+Every program file is a board item of the advisor's client-area board (uploads are stored there,
+in Nutrición / Deporte / Otros): `title` is the item title and `file_url` its file or URL. Without
+an active program: `program: null`, empty slots and `products: []`.
 
-`unlock_mode` is the single academy mode set in the web pane (**Contenido disponible**): `"all"` (web label
-"Siempre") unlocks every lesson; `"drip"` (web label "Por días") unlocks a lesson when `program_day >= unlock_day`.
-It is `null` when `academy_enabled` is `false`. Locked lesson detail returns **403**.
+### GET /products/ · GET /products/<id>/
+
+| Status | Body |
+|---|---|
+| `200` | `{"products": [Product, ...]}`, newest `recorded_on` first (active program only; `[]` without one) |
+| `200` | `{"product": Product}` for `/products/<id>/` (any product of this client) |
+| `404` | `{"error": "Product not found."}`: unknown, another client's, or deleted by the advisor |
+
+### GET /academy/
 
 ```json
 {
   "academy_enabled": true,
-  "unlock_mode": "drip",
   "program_day": 10,
-  "todays_lesson": { "id": 3, "title": "Hoy", "unlock_day": 10, "order": 2, "unlocked": true, "video_url": "...", "video_file_url": "", "text": "Hoy", "attachment_url": "" },
-  "lessons": [
-    { "id": 1, "title": "Dia 1", "unlock_day": 1, "order": 0, "unlocked": true },
-    { "id": 2, "title": "Dia 20", "unlock_day": 20, "order": 1, "unlocked": false }
-  ],
-  "folders": [{ "id": 9, "title": "Videoteca" }]
+  "todays_lesson": { "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true, "video_url": "https://www.youtube.com/watch?v=...", "video_file_url": "", "text": "", "attachment_url": "" },
+  "programs": [
+    {
+      "id": 7,
+      "name": "Deporte en casa",
+      "order": 1,
+      "lessons": [
+        { "id": 4, "program_id": 7, "title": "Bienvenida", "unlock_day": 0, "order": 1, "unlocked": true },
+        { "id": 1, "program_id": 7, "title": "Dia 1", "unlock_day": 1, "order": 2, "unlocked": true },
+        { "id": 2, "program_id": 7, "title": "Dia 20", "unlock_day": 20, "order": 3, "unlocked": false }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Desarrollo personal",
+      "order": 2,
+      "lessons": [{ "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true }]
+    }
+  ]
 }
 ```
 
+| Field | Notes |
+|---|---|
+| `academy_enabled` | Advisor's No/Sí toggle; `false` also without an active program |
+| `program_day` | 1-based program day, `null` without a start date |
+| `todays_lesson` | Detail of the first lesson (programs, then lessons, in order) whose `unlock_day` equals `program_day`, or `null`. `unlock_day: 0` lessons are never `todays_lesson` |
+| `programs` | Programas formativos (the Academia folders), sorted by `order`: `id`, `name`, `order` and `lessons` (Lesson list, without detail keys, sorted by `order`). Each lesson carries its own `unlock_day`; both kinds may be mixed |
+
+When `academy_enabled` is `false`: `programs: []`, `todays_lesson: null`.
+
+**Contract change (programas formativos).** The top-level `lessons` list was removed: lessons now
+come grouped in `programs[].lessons`, and every lesson (list, `todays_lesson` and detail) has
+`program_id`. `unlock_day`, `unlocked`, `todays_lesson` and the detail keys are unchanged; the
+lesson `title` no longer falls back to a video URL (content always comes from a board item).
+
+### GET /academy/lessons/<id>/
+
+| Status | Body |
+|---|---|
+| `200` | `{"lesson": Lesson + detail keys}` |
+| `403` | `{"error": "Lesson is locked.", "unlock_day": 20, "unlocked": false}` |
+| `403` | `{"error": "Academy is not enabled."}` |
+| `403` | `{"error": "Access is not active.", "access_status": "..."}` |
+| `404` | `{"error": "Lesson not found."}` |
+
 ### POST /continuity/
 
-Body: `order_number`, `purchase_date` (YYYY-MM-DD). Creates or refreshes pending `ClientAccessRequest(kind=continuity)`, notifies advisor (ActivityContact + web push), visible in advisor inbox. Does **not** require active access (typical after program end).
+Body: `order_number`, `purchase_date` (`YYYY-MM-DD`). Creates or refreshes a pending
+`ClientAccessRequest(kind=continuity)`, moves access from `none` to `pending`, and notifies the
+advisor (ActivityContact + web push + inbox). Does **not** require active access.
 
-**201** example:
+**201**:
 
 ```json
 {
@@ -225,22 +348,25 @@ Body: `order_number`, `purchase_date` (YYYY-MM-DD). Creates or refreshes pending
 }
 ```
 
+**400** for invalid JSON, a missing field or a malformed date.
+
 ### POST /auth/fcm-token/
 
 Body: `{"fcm_token": "..."}`. Stores the FCM registration token on `ClientDeviceToken`.
-Requires Firebase Admin initialised (**503** otherwise). Call after login and on OS token rotation.
+**200** `{"status": "ok"}`, **400** without `fcm_token`, **503** when Firebase Admin is not
+initialised. Call after login and on OS token rotation.
 
-### FCM events (client app)
+---
 
-| event | When |
+## FCM Events
+
+| `event` | When |
 |-------|------|
-| `client_weigh_reminder` | Celery beat daily; program day ∈ {6,13,20,27} (“weigh tomorrow”) |
+| `client_weigh_reminder` | Celery beat daily; program day ∈ {6, 13, 20, 27} ("weigh tomorrow") |
 | `client_program_ending` | Celery beat daily; `days_remaining == 4` |
 
-Advisor: `POST /measurements/` also writes an ActivityContact note and web-pushes the advisor (`client_new_measurement`).
-
-Beat task: `client_api.tasks.send_client_reminders` (08:00).
-
+Beat task: `client_api.tasks.send_client_reminders` (08:00). The advisor side of
+`POST /measurements/` uses web push (`client_new_measurement`), not FCM.
 
 ---
 
@@ -248,8 +374,12 @@ Beat task: `client_api.tasks.send_client_reminders` (08:00).
 
 | Status | Meaning |
 |--------|---------|
-| 400 | Invalid JSON / missing fields |
+| 400 | Invalid JSON / missing or invalid fields |
 | 401 | Missing/invalid token or access code |
-| 403 | Access not active |
+| 403 | Access not active, academy disabled, or lesson locked |
+| 404 | Resource not found or owned by another client |
 | 429 | Auth rate limit |
+| 503 | Firebase not initialised (`/auth/fcm-token/`) |
 | 500 | Unexpected server error |
+
+Error bodies are `{"error": "<message>"}`, plus the extra keys listed per endpoint.

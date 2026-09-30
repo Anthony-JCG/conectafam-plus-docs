@@ -192,7 +192,7 @@ pro.save()
 | `checkout.session.completed` | Syncs the initial subscription |
 | `customer.subscription.created` | Activates the corresponding level |
 | `customer.subscription.updated` | Renewal, plan change, or scheduled cancellation |
-| `customer.subscription.deleted` | Plan: downgrade to BASIC. Add-on: deactivates the `UserAddon`, leaves the level, and notifies unless the current level already includes it |
+| `customer.subscription.deleted` | Plan: downgrade to BASIC. Add-on: deactivates the `UserAddon`, leaves the level, and notifies unless the current level already includes it; for `client_area`, the advisor's running programs are paused (see the `client_area` README) |
 | `invoice.payment_succeeded` | Confirms the subscription is paid |
 | `invoice.payment_failed` | Logged; Stripe retries automatically |
 | `invoice.upcoming` | Renewal notice, 3 days ahead by default |

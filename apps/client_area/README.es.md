@@ -1,126 +1,324 @@
 # client_area
 
-**Área de clientes** del asesor: programas de nutrición/deporte, códigos de acceso, medidas,
-planes de academia y (más adelante) la API de la app nativa. El consumidor es un `ClientProfile`
-ligado a un `communication.Contact`, no un `users.User` del árbol de patrocinio.
+## Descripción
+
+**Área de clientes** del asesor: programas de nutrición y deporte, códigos de acceso, medidas, fotos
+de evolución, productos nutricionales y academia de cada cliente. El consumidor es un
+`ClientProfile` ligado a un `communication.Contact`, no un `users.User` del árbol de patrocinio. La
+app nativa Fam Fit lee estos datos a través de [`apps/client_api`](../client_api/README.es.md).
 
 Relación con las apps núcleo:
 
-- **`user_levels`** — `CLIENT_AREA_MODEL_KEY` + `ACCESS_ACTION_KEY`. Líder y Líder Pro permitidos.
-  Básico/Pro denegados ahí; `user_has_client_area` también acepta el add-on `client_area`
-  comprado (`pricing.UserAddon`).
-- **`communication`** — `ClientProfile.contact` es OneToOne a `Contact`. Las notas de alta/baja
-  del programa escribirán `ActivityContact`.
-- **`boards`** — el catálogo y las carpetas de academia apuntan a `BoardItem` / `BoardFolder`.
-- **`users.User`** — el asesor posee `AcademyPlan`. El cliente nunca es este usuario.
+- **`user_levels`** — `CLIENT_AREA_MODEL_KEY` + `ACCESS_ACTION_KEY`. Leader y Leader Pro tienen
+  acceso; Basic y Pro no. `user_has_client_area` también acepta el add-on `client_area` comprado
+  (`pricing.UserAddon`).
+- **`communication`** — `ClientProfile.contact` es OneToOne a `Contact`. El inicio y el fin del
+  programa dejan notas en `ActivityContact`. El panel vive en la pestaña **Área de cliente** del
+  modal de contacto.
+- **`boards`** — los archivos de programa y las lecciones de academia apuntan a un `BoardItem` del
+  board del área de clientes del asesor; lo que se sube a mano se guarda antes ahí (ver
+  [Board del catálogo](#board-del-catálogo) y [Almacenamiento en el board](#almacenamiento-en-el-board)).
+- **`pricing`** — vende el add-on; cuando termina, se pausan los programas del asesor (ver
+  [Fin del add-on](#fin-del-add-on-programas-en-pausa)).
+- **`users.User`** — el asesor es dueño de `AcademyPlan`. El cliente nunca es este usuario.
 
 ## Modelos y datos
 
-| Modelo | Relaciones |
+| Modelo | Relaciones y campos |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único. Estado de acceso. Sin FK a User (tokens de dispositivo con la API). |
-| `AcademyPlan` | FK → `users.User` (asesor). Conjunto de lecciones reutilizable. |
-| `AcademyPlanItem` | FK → `AcademyPlan`; FK opcional → `boards.BoardItem`; `unlock_day`. |
-| `ClientProgramAssignment` | FK → `ClientProfile`; FK opcional → `AcademyPlan`. Inicio y duración (la fecha de fin se calcula, no se guarda), academia, `academy_unlock_mode` (`all` = Siempre, `drip` = Por días; un único modo para toda la academia). |
-| `ClientProgramFolder` | FK → asignación + `boards.BoardFolder`. |
-| `ClientProgramFile` | FK → asignación; hueco nutrición/deporte/otros; `BoardItem` o archivo. |
-| `ClientProduct` | FK → asignación; fecha, productos, observaciones. |
-| `ClientLesson` | FK → asignación; copia del ítem de plan + `unlock_day`. |
-| `ClientMeasurement` | FK → perfil; métricas; `source=client\|advisor`; `hidden_by_advisor` oculta la fila solo en la web. |
-| `ClientProgressPhoto` | FK → perfil; frente/espalda/lado; `hidden_by_advisor` (solo web). |
-| `ClientAccessRequest` | FK → perfil; primer acceso o continuidad; `order_number` / `purchase_date` opcionales. |
+| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único y `access_status` (`none` / `pending` / `active` / `deactivated`). |
+| `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`. La fecha de fin se calcula (`start_date + duration_days`) y no se guarda. |
+| `ClientProgramFile` | FK → asignación; hueco `nutrition` / `sport` / `other`; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
+| `ClientProduct` | FK → asignación; `recorded_on`, `products`, `observations`. Solo texto, sin elemento de board. |
+| `TrainingProgram` | Programa formativo: FK → asignación (`training_programs`); FK opcional → `AcademyPlan` (`source_plan`); `name`, `order`. Una carpeta de Academia. |
+| `ClientLesson` | FK → `TrainingProgram` (`lessons`); un elemento de academia: `board_item` (el contenido: vídeo subido, YouTube o cualquier elemento elegido), `text`, `attachment_item` (elemento PDF / imagen del board), `unlock_day`, `order`; FK opcional → `AcademyPlanItem` (`source_item`). |
+| `AcademyPlan` | FK → `users.User` (asesor). Plantilla de un programa formativo: su nombre y sus `AcademyPlanItem`. |
+| `AcademyPlanItem` | FK → `AcademyPlan`; `board_item`, `text`, `attachment_item`, `unlock_day`, `order`, igual que `ClientLesson`. |
+| `ClientMeasurement` | FK → perfil; medidas y `bioimpedance`; `source=client\|advisor`; `hidden_by_advisor`. |
+| `ClientProgressPhoto` | FK → perfil; frente, espalda y lado; `source`; `hidden_by_advisor`. |
+| `ClientAccessRequest` | FK → perfil; `kind` primer acceso o continuidad; `order_number` / `purchase_date` opcionales. |
+
+Todo salvo `AcademyPlan` / `AcademyPlanItem` cuelga de `ClientProfile` con `CASCADE`: al borrar el
+contacto se borra su área de cliente completa (ver el README de `communication`). Los FK a
+`BoardItem` son `SET_NULL`: si se borra el elemento del board, la fila se queda sin él.
+
+### Ciclo del programa
+
+| Estado | Condición | Acceso del cliente |
+|---|---|---|
+| Borrador | `start_date` es `null` | No cambia |
+| Activo | `start_date <= hoy <= start_date + duration_days` y `deactivated_at` vacío | `active` (se concede al activar) |
+| Terminado | `deactivated_at` relleno (asesor, expiración diaria o fin del add-on) | `none` ("Sin acceso") |
+
+- **Activar** (`activate_program`) guarda la fecha de inicio y la duración, acepta las solicitudes
+  de acceso pendientes (`access_actions.grant_access_for_program`) o, si no hay, activa el perfil, y
+  deja una nota en `ActivityContact`.
+- **Duración bloqueada.** En cuanto el programa tiene fecha de inicio, `duration_days` ya no
+  cambia: `ProgramPeriodForm(assignment=...)` pinta el campo desactivado (se ignora lo que llegue en
+  el POST) y `activate_program` lanza `ValueError` si recibe otra duración. La fecha de inicio sí se
+  puede cambiar, y la de fin se mueve con ella.
+- **Desactivar / expirar.** `deactivate_program` y la tarea diaria `expire_due_programs` rellenan
+  `deactivated_at` y llaman a `clear_access_on_program_end` (`access_status=none`); el siguiente
+  login en Fam Fit crea una nueva solicitud `first_access`.
+- Las herramientas siempre editan la **asignación de trabajo** (`get_or_create_working_assignment`):
+  la última sin desactivar o, si no hay, un borrador nuevo. Una asignación terminada conserva su
+  contenido, pero el siguiente programa arranca desde un borrador nuevo.
+
+### Academia: programas formativos
+
+La Academia es un conjunto de **programas formativos** (`TrainingProgram`) que se muestran como
+carpetas; al abrir uno se ven y se gestionan sus elementos (`ClientLesson`). Los programas se crean,
+se renombran y se borran (al borrar uno se van sus elementos, pero sus elementos del board se
+quedan). El interruptor No/Sí `academy_enabled` sigue en la asignación y vale para todos.
+
+Los programas son de la **asignación del cliente**, no del asesor:
+
+- La disponibilidad cuenta desde el día de programa de cada cliente, igual que ya hacían las
+  lecciones.
+- Se reutilizan con **Plantillas**: un `AcademyPlan` guarda un programa formativo. "Guardar como
+  plantilla" (`save_program_as_plan`) guarda el programa abierto con su nombre y, si el asesor ya
+  tiene una plantilla con ese nombre, reemplaza sus elementos; "Añadir desde plantilla"
+  (`add_program_from_plan`) añade un programa nuevo con una copia de los elementos de la plantilla
+  (`source_plan` / `source_item`) y activa la academia. "Copiar de otro cliente"
+  (`copy_academy_from_client`) sustituye todos los programas del cliente por una copia de los del
+  otro.
+- El contenido reutilizable es el propio board: `Videoteca / <nombre del programa>` guarda lo que se
+  sube para cualquier cliente cuyo programa se llame así.
+
+### Disponibilidad de la academia
+
+Cada `ClientLesson` tiene su propia disponibilidad en `unlock_day` (`UNLOCK_DAY_ALWAYS = 0`):
+
+| `unlock_day` | Etiqueta en el panel | Se abre |
+|---|---|---|
+| `0` | Siempre | Siempre, mientras la academia esté activada |
+| `N >= 1` | Día N | Cuando `program_day >= N` |
+
+`todays_lesson` es la primera lección (programas y lecciones en orden) cuyo `unlock_day` coincide con
+el día actual del programa; las de "Siempre" nunca lo son. La asignación solo guarda el interruptor No/Sí `academy_enabled`; no hay un
+modo para toda la academia. Las plantillas y la copia desde otro cliente conservan el `unlock_day` de
+cada elemento.
 
 ### Servicios
 
 | Módulo | Responsabilidad |
 |---|---|
-| `services/access.py` | Asignación de código de acceso único. |
-| `services/entitlement.py` | `user_has_client_area(user)` — capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)`. |
-| `services/programs.py` | Fecha de fin, ventana activa, estado en tarjeta y filtro de lista. |
+| `services/access.py` | Asignación de códigos de acceso únicos |
+| `services/access_actions.py` | Aceptar solicitudes, activar/desactivar el acceso, darlo al iniciar el programa, quitarlo al terminar, textos de WhatsApp de continuidad |
+| `services/entitlement.py` | `user_has_client_area(user)`: capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
+| `services/profiles.py` | `get_or_create_client_profile` |
+| `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
+| `services/content.py` | Medidas, fotos, `assign_program_file` / `upload_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
+| `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
+| `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
+| `services/pane.py` | Contexto del panel, `build_catalog_context`, URLs de WhatsApp |
+| `services/inbox.py` | `pending_access_requests_for_advisor` (de la más reciente a la más antigua, con contacto, URL de WhatsApp y antigüedad) para el bloque del home; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
+| `services/expiry.py` | Expiración diaria y `pause_programs_without_entitlement` |
 
-La pestaña del modal de contacto vive en `communication`. Básico/Pro bloqueados ven
-`RestrictedAccessAlert` `client_area_addon`, cuyo botón hace POST a `create_addon_checkout`
-con `client_area`. Con entitlement, `#pane-cliente` carga por HTMX `load_client_area_pane`
-(`/client-area/load-pane/`) con el esqueleto de secciones; las herramientas completas llegan en
-ramas siguientes. Las tarjetas de contacto muestran activo/inactivo del programa desde
-`services/programs.py` (no el `membership` del CRM). `/api/client/` está en `apps/client_api` (app nativa Fam Fit).
+## Board del catálogo
+
+El asesor trabaja con **un solo** board, "Área de clientes" (`CLIENT_AREA_OWN_BOARD_TITLE`): su board
+privado del área de clientes, que en sus vistas incorpora en solo lectura el catálogo de sistema de
+FAM TEAM. Almacenamiento, permisos y carpetas sombra están en el README de `apps/boards` ("Boards del
+área de clientes").
+
+| Parte | Dueño | Tipos permitidos | Qué puede hacer el asesor |
+|---|---|---|---|
+| Catálogo de sistema (Nutrición, Deporte, Videoteca, Otros) | `USER_ROOT` | PDF, imagen; Videoteca también vídeo subido y YouTube | Verlo y elegir elementos; añadir los suyos y subcarpetas dentro de sus carpetas (carpetas sombra) |
+| Contenido propio | Asesor | Carpetas, texto, imagen, PDF, vídeo subido, YouTube | CRUD completo dentro de las carpetas del catálogo; nada en la raíz del board |
+
+- `services/pane.build_catalog_context` devuelve `catalog_board` (el board propio).
+  `.client-area-tools` lleva su id y la URL de `board_mosaic_data`; el selector de
+  `client_area_tools.js` abre ese mosaico combinado, con botón de volver dentro de las carpetas.
+  Las fichas de solo lectura se pueden elegir, y lo marcado se mantiene al cambiar de carpeta y al
+  buscar.
+- `search_client_area_catalog` filtra el índice Redis de boards a esos dos boards y pinta los
+  resultados con `textContent`.
+- `CatalogItemFormMixin` limita sus `catalog_fields` a
+  `get_client_area_catalog_boards_queryset(asesor)`, así que no entra ningún elemento de otro board.
+- El widget del campo es `widgets.CatalogPickerInput(multiple=...)`: un botón "Añadir desde board"
+  y los ids ocultos que escribe `client_area_tools.js`, por nombre de campo (caben varios selectores
+  en un formulario).
+
+| Herramienta | Selector |
+|---|---|
+| Archivos de programa (`ClientProgramBoardFileForm.board_item`, botón "Añadir desde board") | Un elemento |
+| Contenido de academia (`ClientLessonForm.board_items`) | Varios elementos, uno por elemento de academia |
+| Adjunto de academia (`ClientLessonForm.attachment_item`) | Un PDF o una imagen |
+| Productos nutricionales | Ninguno |
+
+### Almacenamiento en el board
+
+Lo que se sube desde el panel (sin elegirlo del board) se guarda primero como elemento del board, y
+el archivo de programa o la lección apunta a él: el elemento del board es la fuente de verdad.
+`boards.services.client_area_uploads` decide la carpeta: para un asesor, su carpeta sombra de la
+carpeta raíz del catálogo (`ensure_shadow_folder`); para `USER_ROOT`, la propia carpeta del catálogo.
+
+| Subida | Carpeta del board |
+|---|---|
+| Programa, Tipo Alimentación (`nutrition`) | Nutrición |
+| Programa, Tipo Deporte (`sport`) | Deporte |
+| Programa, Tipo Otros (`other`) | Otros |
+| Academia: vídeo, enlace de YouTube, adjunto | Videoteca / `<nombre del programa>` (la subcarpeta se crea con la primera subida) |
+
+`const.PROGRAM_SLOT_FOLDERS` relaciona cada hueco con su carpeta. La subcarpeta de Videoteca se busca
+por nombre en cada subida: renombrar un programa no renombra la carpeta (puede compartirla con
+programas de otros clientes que se llamen igual); lo que se suba después va al nombre nuevo.
+
+## Fin del add-on: programas en pausa
+
+Cuando un asesor pierde el área de clientes (termina la suscripción del add-on `client_area`, o
+baja de Leader sin tener el add-on), `services/expiry.pause_programs_without_entitlement(asesor)`
+ejecuta `deactivate_program` en cada asignación iniciada y sin desactivar: se rellena
+`deactivated_at`, el cliente vuelve a "Sin acceso" y queda una nota en `ActivityContact`. "En pausa"
+es el estado terminado de arriba; productos, archivos y academia siguen en la asignación.
+
+Disparadores (`signals.py`, encolados tras el commit como `tasks.pause_lapsed_client_programs_task`):
+
+| Señal | Condición |
+|---|---|
+| `post_save` de `pricing.UserAddon` | `is_active=False` para `client_area` (lo escribe `sync_addon_subscription` con `customer.subscription.deleted` / `.updated`) |
+| `post_save` de `user_levels.UserLevelProfile` | Cambio de nivel |
+
+El servicio comprueba primero `user_has_client_area`, así que una subida de nivel que ya incluye
+la herramienta no pausa nada. Borrar el contenido tras un periodo de gracia queda fuera (llegará
+con el flujo global de bajada de nivel).
+
+## Vistas e integración frontend
+
+**Esta app usa HTMX.** `#pane-cliente`, en el modal de contacto, carga `load_client_area_pane`. Los
+usuarios Basic/Pro sin el add-on ven `RestrictedAccessAlert` `client_area_addon`, cuyo botón hace
+POST a `pricing.create_addon_checkout` con `client_area`.
+
+Prefijo de URL: **`/client-area/`**
+
+| Endpoint | Nombre | Respuesta |
+|---|---|---|
+| `load-pane/` | `load_client_area_pane` | Parcial de herramientas (`client-area-tools.html`) |
+| `forms/<kind>/` | `client_area_tool_form` | Parcial del formulario para el modal compartido (`views.TOOL_FORMS`) |
+| `access/accept/` · `activate/` · `deactivate/` | `client_area_accept_access`, `client_area_activate_access`, `client_area_deactivate_access` | Parcial de herramientas |
+| `measurements/add/` · `photos/add/` | `client_area_add_measurement`, `client_area_add_photo` | Parcial de la tabla, o el formulario con errores |
+| `measurements/hide/` · `photos/hide/` | `client_area_hide_measurement`, `client_area_hide_photo` | Parcial de la tabla |
+| `program/assign/` | `client_area_assign_program` | Subida (se guarda en el board): parcial de la tabla, o el formulario con errores |
+| `program/assign-from-board/` | `client_area_assign_program_from_board` | Elemento elegido del board: parcial de la tabla, o el formulario con errores |
+| `products/add/` | `client_area_add_product` | Parcial de la tabla, o el formulario con errores |
+| `products/<id>/edit/` | `client_area_edit_product` | GET: formulario relleno; POST: parcial de la tabla, o el formulario con errores |
+| `products/<id>/delete/` | `client_area_delete_product` | Parcial de la tabla |
+| `academy/` (GET) | `client_area_academy` | Sección de academia con las carpetas de programas |
+| `academy/toggle/` | `client_area_toggle_academy` | Sección de academia (el programa enviado en `program_id` sigue abierto) |
+| `academy/programs/add/` | `client_area_add_training_program` | Sección de academia con el programa nuevo abierto; toast 422 si el nombre no es válido |
+| `academy/programs/<id>/` (GET) | `client_area_training_program` | Sección de academia con el programa abierto |
+| `academy/programs/<id>/rename/` · `delete/` | `client_area_rename_training_program`, `client_area_delete_training_program` | Sección de academia (abierto / carpetas) |
+| `academy/programs/<id>/save-template/` | `client_area_save_training_program_template` | Sección de academia, programa abierto |
+| `academy/programs/<id>/lessons/add/` | `client_area_add_lesson` | GET: formulario para el modal; POST: tabla de lecciones, o el formulario con errores |
+| `academy/lessons/<id>/availability/` | `client_area_set_lesson_availability` | Tabla de lecciones; toast 422 si el dato no es válido |
+| `academy/lessons/<id>/delete/` | `client_area_delete_lesson` | Tabla de lecciones |
+| `academy/plans/reuse/` · `copy/` | `client_area_reuse_academy_plan`, `client_area_copy_academy` | Sección de academia (el programa nuevo abierto / carpetas) |
+| `program/activate/` · `program/deactivate/` | `client_area_activate_program`, `client_area_deactivate_program` | Parcial de herramientas; si el periodo no es válido se vuelve a pintar `#caProgressSection` |
+| `access-requests/` | `client_area_access_requests` | Parcial con la lista completa para el modal "Ver todas" del home |
+| `access-requests/accept/` | `client_area_accept_access_home` | Bloque del home (swap principal) + lista del modal (OOB); `showToast` |
+| `catalog/search/` | `client_area_catalog_search` | Resultados de búsqueda en JSON |
+
+### Modal de formulario compartido
+
+- Las filas de evolución, fotos, archivos de programa, productos y academia se añaden con un botón
+  **Añadir** que abre `#clientAreaFormModal` (`components/modals/client-area-modals.html`, incluido
+  en `contacts.html` fuera de `#contactModal`, junto al selector del catálogo).
+- `data-ca-open-form` lo abre con `Modal.show()` y no con `data-bs-toggle`, para que
+  `#contactModal` no se cierre. El parcial del formulario (`client-area-tool-form.html`) rellena el
+  cuerpo y fija el título con `hx-swap-oob`.
+- Si se guarda bien, la vista solo reemplaza el parcial de la tabla y envía `showToast` +
+  `clientAreaFormSaved` (cierra el modal). Con errores, el formulario se vuelve a pintar dentro del
+  modal con un **200** (`HX-Retarget`).
+- Los modales de alta son de una columna (`ToolForm.field_class = "col-12"`); solo Evolución
+  (medidas) mantiene dos (`col-12 col-sm-6`). `cotton/tool_add_button` acepta un `url` opcional
+  para formularios de un objeto anidado (los elementos de academia de un programa).
+- **Secciones del formulario.** Los campos llevan los attrs de sección del repo (`data_section` /
+  `data_section_label`, como en `components/form-model.html`). `client-area-tool-form.html` pinta
+  el título de la sección cuando cambia, y `cotton/form_field` oculta la etiqueta del campo dentro de
+  una sección (la etiqueta es el título).
+
+### Secciones del panel
+
+- **Acceso** — código de acceso con copiar, aceptar solicitud, activar/desactivar el acceso, enlace
+  de WhatsApp y badges de App Store / Play Store (provisionales).
+- **Evolución / Fotos** — con scroll horizontal. Borrar una fila (la haya creado el cliente o el
+  asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Fam Fit la sigue
+  devolviendo.
+- **Productos nutricionales** — `ClientProductForm` (fecha, productos, observaciones; sin selector
+  del catálogo). Al pulsar una fila se abre el mismo modal ya relleno (`data-ca-open-form` +
+  `hx-get`); la celda de borrar es `data-ca-row-action`, el clic de la fila no la tiene en cuenta, y
+  lleva un botón `btn-outline-danger` con `hx-confirm`. Borrar elimina la fila. La API lee los
+  productos en directo, sin caché.
+- **Programa** — **Asignar programa** (`ClientProgramFileForm`: Tipo, Fecha y un PDF o imagen que
+  se guarda en el board) y, al lado, **Añadir desde board** (`ClientProgramBoardFileForm`: Tipo,
+  Fecha y un elemento elegido). La tabla muestra el título del elemento del board.
+- **Academia** — interruptor No/Sí que se guarda al cambiarlo. Cerrada: una carpeta por programa
+  formativo (nombre y número de contenidos), un campo "Nuevo programa formativo" y el desplegable
+  **Plantillas** ("Añadir desde plantilla" y "Copiar de otro cliente", con `hx-confirm`). Abierta:
+  botón de volver, renombrar en línea, borrar (`hx-confirm`), la tabla de elementos, **Añadir
+  contenido** y **Guardar como plantilla**. **Añadir contenido** abre `ClientLessonForm`, de una
+  columna y por secciones:
+
+  | Sección | Campos |
+  |---|---|
+  | Disponibilidad | `widgets.AvailabilityWidget`: casilla "Siempre" con el campo "Día" a su derecha (se envían como `unlock_day_always` / `unlock_day`). Marcar Siempre desactiva el día (`client_area_tools.js`); `AvailabilityField` exige un día ≥ 1 salvo con Siempre |
+  | Contenido | `widgets.SegmentedRadioSelect` `content_source`: Subir vídeo (`video_file`) / YouTube (`youtube_url`, validado con `extract_youtube_video_id`) / Desde board (`board_items`, varios) |
+  | Texto | `text` |
+  | Adjuntar archivo (PDF, imagen) | `attachment_source`: Subir archivo (`attachment_file`) / Desde board (`attachment_item`, PDF o imagen) |
+
+  Los campos con `data-ca-when="<origen>=<valor>"` solo se ven con esa opción marcada; `clean()`
+  descarta los de las opciones no marcadas y exige algún contenido. `add_lessons` crea un elemento
+  por cada contenido (la subida, el YouTube o cada elemento elegido), todos con el texto y el
+  adjunto; si solo hay texto o adjunto, uno solo. Cada fila tiene el mismo widget de disponibilidad,
+  que se guarda al cambiarlo (al marcar Siempre o al escribir un día), y un botón de borrar con
+  `hx-confirm`.
+- **Progreso** — `ProgramPeriodForm` (fecha de inicio y duración; la fecha de fin la calcula
+  `client_area_tools.js` al momento y nunca se envía). En borrador: **Activar**. Activo: **Guardar** y
+  **Desactivar**, con la duración de solo lectura.
+### Bloque de solicitudes del home
+
+`components/card_client_access_requests.html` (`#client-access-requests-section`, lo incluye
+`main/home.html` cuando el usuario tiene el área de clientes) muestra las tres últimas
+`ClientAccessRequest` pendientes con el componente cotton `<c-access-request-row>`: avatar, nombre
+del contacto, qué pide (acceso, o continuar el programa con el número de pedido), hace cuánto
+("Hace 2 horas"), un botón de WhatsApp y **Admitir**.
+
+- **Ver todas** abre `#accessRequestsModal` (`components/modals/modal-access-requests.html`,
+  extiende `base-modal.html`). Su cuerpo carga `client_area_access_requests` por HTMX cada vez que
+  salta `show.bs.modal`, así que la lista siempre está al día; ya no hay una página aparte.
+- **Admitir**, desde el bloque o desde el modal, hace POST a `client_area_accept_access_home`, que
+  acepta la solicitud (`accept_access_request`) y devuelve el bloque (se reemplaza con `outerHTML`)
+  junto con la lista del modal en `hx-swap-oob`, más un `showToast`. Si falla, toast con 422.
+- Las dos vistas exigen `user_has_client_area` y solo ven solicitudes de los contactos del propio
+  asesor.
+
+## Migraciones
+
+| Migración | Cambio |
+|---|---|
+| `0005_lesson_unlock_day_always` | `unlock_day` pasa a valer `0` por defecto en `ClientLesson` y `AcademyPlanItem`; las lecciones de asignaciones con `academy_unlock_mode="all"` quedan con `unlock_day=0` (modelos históricos) |
+| `0006_remove_academy_unlock_mode_and_folders` | Elimina `ClientProgramAssignment.academy_unlock_mode` y el modelo `ClientProgramFolder` |
+| `0007_remove_clientproduct_board_item` | Elimina `ClientProduct.board_item` |
+| `0008_remove_clientprogramfile_file` | Elimina `ClientProgramFile.file`: lo que se sube es un elemento del board |
+| `0009_trainingprogram` | Crea `TrainingProgram`; añade `ClientLesson.program` (opcional por ahora) y `attachment_item` en `ClientLesson` / `AcademyPlanItem` |
+| `0010_default_training_programs` | Datos (modelos históricos): cada asignación con lecciones recibe un "Programa formativo" (renombrable, con el `source_plan` de la asignación) que las agrupa |
+| `0011_lesson_board_content_only` | `ClientLesson.program` pasa a ser obligatorio; elimina `ClientLesson.assignment`, `video_url`, `video_file`, `attachment`, los mismos campos de contenido de `AcademyPlanItem` y `ClientProgramAssignment.source_plan` |
+
+Los `AcademyPlanItem` guardados desde asignaciones en modo "all" conservan el día que tenían. El
+contenido propio de las lecciones en los campos que borra `0011` (URL de vídeo, vídeo, adjunto) no se
+convierte en elementos del board.
 
 ## Configuración y dependencias
 
-Dependencias: `communication`, `boards`, `users`, `user_levels`, `pricing`. Media por el backend
-global. El catálogo de add-ons, sus precios por nivel y el checkout Stripe viven en `pricing`
-(`Addon` con código `client_area`, sembrado por la migración `0003` de `pricing`).
-Esta app **aún no usa** Sentry, Redis ni Celery.
+Dependencias: `communication`, `boards`, `users`, `user_levels`, `pricing`. El add-on, sus precios por
+nivel y el checkout de Stripe viven en `pricing` (`Addon` con código `client_area`, sembrado por la
+migración `0003` de `pricing`). Los archivos van por el backend de almacenamiento global.
 
-## Catálogo (boards)
-
-El catálogo compartido de FAM TEAM es un `boards.Board` con `is_client_area=True`,
-sembrado con `python manage.py seed_client_area_board` (carpetas: Nutrición, Deporte,
-Videoteca, Otros). Los asesores con `user_has_client_area` lo abren en solo lectura y
-eligen referencias `BoardItem` / `BoardFolder` para programas. No pueden editar el
-contenido de sistema; sus archivos personales van en sus boards o en
-`ClientProgramFile`. Ver el README de `apps/boards`.
-
-
-## Herramientas WEB (modal de contacto)
-
-Con entitlement, #pane-cliente carga por HTMX el partial completo client-area-tools:
-
-- Badges App Store / Play Store (placeholders hasta que existan URLs en settings).
-- Codigo de acceso con copiar; aceptar solicitud; activar / desactivar acceso.
-- Enlace WhatsApp (wa.me) si el contacto tiene telefono.
-- Tablas: evolucion (asesor anade filas), fotos, programa (PDF alimentacion/deporte/otros), productos.
-- Selector de catalogo FAM TEAM (Board.is_client_area) con mosaico + busqueda Redis (search_index filtrado).
-- Academia: interruptor No/Sí, contenido disponible (Siempre / Por días), tarjetas de carpetas, contenidos por día, plantillas y copia de otro cliente.
-- Progreso: fecha de inicio y duración elegidas por el asesor, fecha de fin calculada, activar (activa también el acceso a la app), %; al desactivar o expirar, el acceso vuelve a `none` y se crea una nota para el asesor.
-
-### Servicios adicionales
-
-| Modulo | Responsabilidad |
+| Servicio | Uso |
 |---|---|
-| services/profiles.py | get_or_create_client_profile |
-| services/access_actions.py | Aceptar solicitud / activar / desactivar / dar acceso al activar el programa / quitarlo al terminar |
-| services/content.py | Mediciones, fotos, archivos de programa, productos |
-| services/academy.py | Ajustes (No/Sí + contenido disponible), carpetas, lecciones, plantillas, copia entre clientes |
-| services/catalog.py | Busqueda del catalogo client-area |
-| services/pane.py | Contexto del partial de herramientas |
-| services/expiry.py | Expiracion diaria de programas + push web al asesor |
-| 	asks.py | Celery expire_client_programs_task (beat 05:15) |
+| Celery beat | `client_area.tasks.expire_client_programs_task` cada día a las 05:15 |
+| Celery | `client_area.tasks.pause_lapsed_client_programs_task` (fin del add-on) |
+| Redis | La búsqueda del catálogo reutiliza el índice de búsqueda de boards |
 
-La API nativa (Fam Fit) comienza en `apps/client_api`; FCM al consumidor en ramas posteriores.
-
-## Pulido WEB (Rama 6)
-
-- Tablas de evolución y fotos con scroll horizontal (~4 columnas visibles). El asesor puede añadir filas y eliminar cualquiera, la haya registrado el cliente o el asesor. Eliminar solo marca `hidden_by_advisor`: la fila desaparece del panel web, pero la API de Fam Fit (`/api/client/`) la sigue devolviendo. No se puede deshacer.
-- Las filas de evolución, fotos, archivos de programa y productos nutricionales se añaden con un botón **Añadir** que
-  abre el modal compartido `#clientAreaFormModal` (`components/modals/client-area-modals.html`, incluido en
-  `contacts.html` fuera de `#contactModal` para que se apile bien, junto al selector de catálogo). El botón lo abre
-  con `Modal.show()` (`data-ca-open-form`), no con `data-bs-toggle`, que cerraría `#contactModal`.
-  `client_area_tool_form` (`forms/<kind>/`) carga el formulario desde `views.TOOL_FORMS`; si se guarda bien, la vista
-  reemplaza solo el parcial de esa tabla (`components/partials/client-area-*-table.html`) y envía `showToast` +
-  `clientAreaFormSaved` (cierra el modal). Si hay errores, el formulario se vuelve a pintar dentro del modal
-  (`HX-Retarget`). El modal extiende el global `base-modal.html` (`client-area-form-modal.html`); el parcial del
-  formulario (`components/partials/client-area-tool-form.html`) rellena su cuerpo y fija el título con
-  `hx-swap-oob`. Componentes cotton: `form_field`, `tool_add_button`.
-- **Academia** (`components/partials/client-area-academy.html`): el interruptor No/Sí y **Contenido disponible**
-  (`Siempre` = `all`, todas las lecciones abiertas; `Por días` = `drip`, cada lección se abre el día `unlock_day` del
-  programa) se guardan al cambiarlos (`client_area_toggle_academy`). Las carpetas del catálogo
-  se muestran como tarjetas seleccionables y también se guardan al marcarlas. Solo se vuelve a pintar esa sección.
-  **Añadir contenido** abre el modal compartido con `ClientLessonForm` (kind `lesson`) y, al guardar, reemplaza solo la
-  tabla de contenidos. Las plantillas y la copia desde otro cliente están en el desplegable **Plantillas**.
-- **Progreso** (`components/partials/client-area-progress.html`): el asesor elige la fecha de inicio y la duración
-  (`ProgramPeriodForm`). La fecha de fin no se puede editar: `client_area_tools.js` la recalcula al momento y el
-  servidor nunca la recibe, porque siempre se deriva de inicio + duración (`program_end_date`). Por eso no hay campo en
-  base de datos; la API de Fam Fit mantiene sus campos y añade `start_date` al bloque `program`. Mientras el programa
-  no ha empezado, el botón es **Activar**; después aparecen **Guardar** (cambia inicio y duración) y **Desactivar**.
-  Si el formulario no es válido, se vuelve a pintar la sección con los errores. Títulos, campos y botones usan los
-  tamaños compactos del resto del panel.
-- **Programa y acceso a la app**: `activate_program` llama a `access_actions.grant_access_for_program`, que acepta las
-  solicitudes de acceso pendientes (primer acceso o continuidad) o, si no hay ninguna, activa el perfil. Así el cliente
-  puede entrar en Fam Fit con `access_code` + `device_id`. Tanto `deactivate_program` como la expiración diaria llaman
-  a `clear_access_on_program_end`, que deja el acceso en `none` ("Sin acceso"); cuando el cliente vuelva a entrar con
-  su código se creará una nueva solicitud `first_access` para el asesor.
-- Tarjeta **Solicitudes** en el home (junto a tareas programadas): Admitir, WhatsApp, Ver todas.
-- Listado: `client_area_access_requests`.
-- `activate_program` / `deactivate_program` escriben `ActivityContact` (la expiración automática ya lo hacía al finalizar).
-
+No tiene integración propia con Sentry.
