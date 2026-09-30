@@ -21,13 +21,13 @@ Relación con las apps núcleo:
 | `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único. Estado de acceso. Sin FK a User (tokens de dispositivo con la API). |
 | `AcademyPlan` | FK → `users.User` (asesor). Conjunto de lecciones reutilizable. |
 | `AcademyPlanItem` | FK → `AcademyPlan`; FK opcional → `boards.BoardItem`; `unlock_day`. |
-| `ClientProgramAssignment` | FK → `ClientProfile`; FK opcional → `AcademyPlan`. Inicio, duración, academia, drip vs todo. |
+| `ClientProgramAssignment` | FK → `ClientProfile`; FK opcional → `AcademyPlan`. Inicio y duración (la fecha de fin se calcula, no se guarda), academia, `academy_unlock_mode` (`all` = Siempre, `drip` = Por días; un único modo para toda la academia). |
 | `ClientProgramFolder` | FK → asignación + `boards.BoardFolder`. |
 | `ClientProgramFile` | FK → asignación; hueco nutrición/deporte/otros; `BoardItem` o archivo. |
 | `ClientProduct` | FK → asignación; fecha, productos, observaciones. |
 | `ClientLesson` | FK → asignación; copia del ítem de plan + `unlock_day`. |
-| `ClientMeasurement` | FK → perfil; métricas; `source=client\|advisor`. El asesor no borra `source=client`. |
-| `ClientProgressPhoto` | FK → perfil; frente/espalda/lado. |
+| `ClientMeasurement` | FK → perfil; métricas; `source=client\|advisor`; `hidden_by_advisor` oculta la fila solo en la web. |
+| `ClientProgressPhoto` | FK → perfil; frente/espalda/lado; `hidden_by_advisor` (solo web). |
 | `ClientAccessRequest` | FK → perfil; primer acceso o continuidad; `order_number` / `purchase_date` opcionales. |
 
 ### Servicios
@@ -71,18 +71,17 @@ Con entitlement, #pane-cliente carga por HTMX el partial completo client-area-to
 - Enlace WhatsApp (wa.me) si el contacto tiene telefono.
 - Tablas: evolucion (asesor anade filas), fotos, programa (PDF alimentacion/deporte/otros), productos.
 - Selector de catalogo FAM TEAM (Board.is_client_area) con mosaico + busqueda Redis (search_index filtrado).
-- Academia: interruptor, chips de carpetas, lecciones por dia, guardar / reutilizar plantilla, copiar de otro cliente.
-- Progreso: dias, fecha fin, activar, %; al expirar el acceso pasa a 
-one y se crea nota de asesor.
+- Academia: interruptor No/Sí, contenido disponible (Siempre / Por días), tarjetas de carpetas, contenidos por día, plantillas y copia de otro cliente.
+- Progreso: fecha de inicio y duración elegidas por el asesor, fecha de fin calculada, activar (activa también el acceso a la app), %; al desactivar o expirar, el acceso vuelve a `none` y se crea una nota para el asesor.
 
 ### Servicios adicionales
 
 | Modulo | Responsabilidad |
 |---|---|
 | services/profiles.py | get_or_create_client_profile |
-| services/access_actions.py | Aceptar solicitud / activar / desactivar / limpiar en expiracion |
+| services/access_actions.py | Aceptar solicitud / activar / desactivar / dar acceso al activar el programa / quitarlo al terminar |
 | services/content.py | Mediciones, fotos, archivos de programa, productos |
-| services/academy.py | Toggle, carpetas, lecciones, plantillas, copia entre clientes |
+| services/academy.py | Ajustes (No/Sí + contenido disponible), carpetas, lecciones, plantillas, copia entre clientes |
 | services/catalog.py | Busqueda del catalogo client-area |
 | services/pane.py | Contexto del partial de herramientas |
 | services/expiry.py | Expiracion diaria de programas + push web al asesor |
@@ -92,7 +91,35 @@ La API nativa (Fam Fit) comienza en `apps/client_api`; FCM al consumidor en rama
 
 ## Pulido WEB (Rama 6)
 
-- Tablas de evolución y fotos con scroll horizontal (~4 columnas visibles). El asesor puede añadir y borrar solo filas con `source=advisor` (no borra `source=client`).
+- Tablas de evolución y fotos con scroll horizontal (~4 columnas visibles). El asesor puede añadir filas y eliminar cualquiera, la haya registrado el cliente o el asesor. Eliminar solo marca `hidden_by_advisor`: la fila desaparece del panel web, pero la API de Fam Fit (`/api/client/`) la sigue devolviendo. No se puede deshacer.
+- Las filas de evolución, fotos, archivos de programa y productos nutricionales se añaden con un botón **Añadir** que
+  abre el modal compartido `#clientAreaFormModal` (`components/modals/client-area-modals.html`, incluido en
+  `contacts.html` fuera de `#contactModal` para que se apile bien, junto al selector de catálogo). El botón lo abre
+  con `Modal.show()` (`data-ca-open-form`), no con `data-bs-toggle`, que cerraría `#contactModal`.
+  `client_area_tool_form` (`forms/<kind>/`) carga el formulario desde `views.TOOL_FORMS`; si se guarda bien, la vista
+  reemplaza solo el parcial de esa tabla (`components/partials/client-area-*-table.html`) y envía `showToast` +
+  `clientAreaFormSaved` (cierra el modal). Si hay errores, el formulario se vuelve a pintar dentro del modal
+  (`HX-Retarget`). El modal extiende el global `base-modal.html` (`client-area-form-modal.html`); el parcial del
+  formulario (`components/partials/client-area-tool-form.html`) rellena su cuerpo y fija el título con
+  `hx-swap-oob`. Componentes cotton: `form_field`, `tool_add_button`.
+- **Academia** (`components/partials/client-area-academy.html`): el interruptor No/Sí y **Contenido disponible**
+  (`Siempre` = `all`, todas las lecciones abiertas; `Por días` = `drip`, cada lección se abre el día `unlock_day` del
+  programa) se guardan al cambiarlos (`client_area_toggle_academy`). Las carpetas del catálogo
+  se muestran como tarjetas seleccionables y también se guardan al marcarlas. Solo se vuelve a pintar esa sección.
+  **Añadir contenido** abre el modal compartido con `ClientLessonForm` (kind `lesson`) y, al guardar, reemplaza solo la
+  tabla de contenidos. Las plantillas y la copia desde otro cliente están en el desplegable **Plantillas**.
+- **Progreso** (`components/partials/client-area-progress.html`): el asesor elige la fecha de inicio y la duración
+  (`ProgramPeriodForm`). La fecha de fin no se puede editar: `client_area_tools.js` la recalcula al momento y el
+  servidor nunca la recibe, porque siempre se deriva de inicio + duración (`program_end_date`). Por eso no hay campo en
+  base de datos; la API de Fam Fit mantiene sus campos y añade `start_date` al bloque `program`. Mientras el programa
+  no ha empezado, el botón es **Activar**; después aparecen **Guardar** (cambia inicio y duración) y **Desactivar**.
+  Si el formulario no es válido, se vuelve a pintar la sección con los errores. Títulos, campos y botones usan los
+  tamaños compactos del resto del panel.
+- **Programa y acceso a la app**: `activate_program` llama a `access_actions.grant_access_for_program`, que acepta las
+  solicitudes de acceso pendientes (primer acceso o continuidad) o, si no hay ninguna, activa el perfil. Así el cliente
+  puede entrar en Fam Fit con `access_code` + `device_id`. Tanto `deactivate_program` como la expiración diaria llaman
+  a `clear_access_on_program_end`, que deja el acceso en `none` ("Sin acceso"); cuando el cliente vuelva a entrar con
+  su código se creará una nueva solicitud `first_access` para el asesor.
 - Tarjeta **Solicitudes** en el home (junto a tareas programadas): Admitir, WhatsApp, Ver todas.
 - Listado: `client_area_access_requests`.
 - `activate_program` / `deactivate_program` escriben `ActivityContact` (la expiración automática ya lo hacía al finalizar).

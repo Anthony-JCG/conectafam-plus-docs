@@ -63,6 +63,15 @@ May create an idempotent `ClientAccessRequest(kind=first_access)`.
 
 **401** — unknown code (counts toward IP rate limit: 10 / 10 minutes).
 
+**Access lifecycle** (`ClientProfile.access_status`, set from the advisor web pane):
+
+| Event | `access_status` |
+|-------|-----------------|
+| Login with a valid code while not active | `none` → `pending` + `ClientAccessRequest(first_access)` |
+| Advisor accepts the request, turns access on, or activates the program (Progreso → Activar accepts pending requests) | `active` |
+| Advisor turns access off | `deactivated` |
+| Advisor deactivates the program, or the daily expiry job ends it | `none` ("Sin acceso"); the next login creates a new request |
+
 **429** — rate limited.
 
 ### Authenticated requests
@@ -101,9 +110,15 @@ Authorization: Token <token>
 | POST | /continuity/ | token | Continuity request (order + purchase date) |
 | POST | /auth/fcm-token/ | token + Firebase | Register device FCM token |
 
+### Program block
+
+`program` in `/me/`, `/home/` and `/program/` describes the active assignment. The advisor sets `start_date` and
+`duration_days`; `end_date` is always `start_date + duration_days` (derived, never stored or editable). `day` is the
+1-based program day, `progress_percent` 0–100, `days_remaining` until `end_date`.
+
 ### GET /me/
 
-`json
+```json
 {
   "client_profile_id": 1,
   "name": "Maria Castillo",
@@ -111,6 +126,7 @@ Authorization: Token <token>
   "access_code": "ABCD2345",
   "program": {
     "day": 10,
+    "start_date": "2026-09-02",
     "duration_days": 90,
     "end_date": "2026-12-01",
     "progress_percent": 11,
@@ -119,15 +135,15 @@ Authorization: Token <token>
   },
   "program_finished": false
 }
-`
+```
 
 ### GET /home/
 
-`json
+```json
 {
   "greeting_name": "Maria Castillo",
   "access_status": "active",
-  "program": { "day": 10, "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
+  "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "current": {
     "id": 12,
     "recorded_on": "2026-09-25",
@@ -144,25 +160,23 @@ Authorization: Token <token>
   "weekly_deltas": { "weight": -2.0, "waist": -2.0, "chest": null, "hip": null, "arm": null, "leg": null },
   "advisor_whatsapp_url": "https://wa.me/593999111222"
 }
-`
+```
 
-Bioimpedance / daily calories: v1 accepts optional ioimpedance JSON from the app; empty cards are omitted client-side. No server-side scale formulas yet.
+Bioimpedance / daily calories: v1 accepts optional `bioimpedance` JSON from the app; empty cards are omitted client-side. No server-side scale formulas yet.
 
 ### POST /measurements/
 
-JSON body: weight, waist, chest, hip, rm, leg, optional ioimpedance object, optional 
-ecorded_on. Persists source=client. **201** { "measurement": {…} }.
+JSON body: weight, waist, chest, hip, `arm`, leg, optional `bioimpedance` object, optional `recorded_on`. Persists source=client. **201** { "measurement": {…} }.
 
 ### POST /photos/
 
-Multipart: at least one of ront / ack / side, optional 
-ecorded_on. Persists source=client. **201** { "photo": {…} } with absolute image URLs.
+Multipart: at least one of `front` / `back` / side, optional `recorded_on`. Persists source=client. **201** { "photo": {…} } with absolute image URLs.
 
 ### GET /program/
 
 ```json
 {
-  "program": { "day": 10, "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
+  "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "files": {
     "nutrition": [{ "id": 1, "slot": "nutrition", "title": "plan.pdf", "file_url": "https://...", "assigned_on": "2026-09-25" }],
     "sport": [],
@@ -174,7 +188,9 @@ ecorded_on. Persists source=client. **201** { "photo": {…} } with absolute ima
 
 ### GET /academy/
 
-Drip: `unlocked` when `program_day >= unlock_day`. Mode `all` unlocks every lesson. Locked lesson detail returns **403**.
+`unlock_mode` is the single academy mode set in the web pane (**Contenido disponible**): `"all"` (web label
+"Siempre") unlocks every lesson; `"drip"` (web label "Por días") unlocks a lesson when `program_day >= unlock_day`.
+It is `null` when `academy_enabled` is `false`. Locked lesson detail returns **403**.
 
 ```json
 {

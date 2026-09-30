@@ -63,6 +63,15 @@ Puede crear un `ClientAccessRequest(kind=first_access)` idempotente.
 
 **401** — código desconocido (cuenta para el rate limit por IP: 10 / 10 minutos).
 
+**Ciclo del acceso** (`ClientProfile.access_status`, lo gestiona el asesor desde el panel web):
+
+| Evento | `access_status` |
+|--------|-----------------|
+| Login con un código válido sin acceso activo | `none` → `pending` + `ClientAccessRequest(first_access)` |
+| El asesor acepta la solicitud, activa el acceso o activa el programa (Progreso → Activar acepta las solicitudes pendientes) | `active` |
+| El asesor desactiva el acceso | `deactivated` |
+| El asesor desactiva el programa o la expiración diaria lo termina | `none` ("Sin acceso"); el siguiente login crea una nueva solicitud |
+
 **429** — rate limit.
 
 ### Peticiones autenticadas
@@ -101,9 +110,15 @@ Authorization: Token <token>
 | POST | /continuity/ | token | Solicitud de continuidad (pedido + fecha) |
 | POST | /auth/fcm-token/ | token + Firebase | Registrar token FCM del dispositivo |
 
+### Bloque `program`
+
+`program` en `/me/`, `/home/` y `/program/` describe la asignación activa. El asesor fija `start_date` y
+`duration_days`; `end_date` siempre es `start_date + duration_days` (se calcula, no se guarda ni se edita). `day` es el
+día del programa empezando en 1, `progress_percent` va de 0 a 100 y `days_remaining` cuenta hasta `end_date`.
+
 ### GET /me/
 
-`json
+```json
 {
   "client_profile_id": 1,
   "name": "Maria Castillo",
@@ -111,6 +126,7 @@ Authorization: Token <token>
   "access_code": "ABCD2345",
   "program": {
     "day": 10,
+    "start_date": "2026-09-02",
     "duration_days": 90,
     "end_date": "2026-12-01",
     "progress_percent": 11,
@@ -119,15 +135,15 @@ Authorization: Token <token>
   },
   "program_finished": false
 }
-`
+```
 
 ### GET /home/
 
-`json
+```json
 {
   "greeting_name": "Maria Castillo",
   "access_status": "active",
-  "program": { "day": 10, "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
+  "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "current": {
     "id": 12,
     "recorded_on": "2026-09-25",
@@ -144,19 +160,17 @@ Authorization: Token <token>
   "weekly_deltas": { "weight": -2.0, "waist": -2.0, "chest": null, "hip": null, "arm": null, "leg": null },
   "advisor_whatsapp_url": "https://wa.me/593999111222"
 }
-`
+```
 
-Bioimpedancia / calorías diarias: v1 acepta ioimpedance JSON opcional desde la app; las cards vacías se omiten en el cliente. Sin fórmulas de báscula en servidor todavía.
+Bioimpedancia / calorías diarias: v1 acepta `bioimpedance` JSON opcional desde la app; las cards vacías se omiten en el cliente. Sin fórmulas de báscula en servidor todavía.
 
 ### POST /measurements/
 
-Body JSON: weight, waist, chest, hip, rm, leg, ioimpedance opcional, 
-ecorded_on opcional. Persiste source=client. **201** { "measurement": {…} }.
+Body JSON: weight, waist, chest, hip, `arm`, leg, `bioimpedance` opcional, `recorded_on` opcional. Persiste source=client. **201** { "measurement": {…} }.
 
 ### POST /photos/
 
-Multipart: al menos una de ront / ack / side, 
-ecorded_on opcional. Persiste source=client. **201** { "photo": {…} } con URLs absolutas.
+Multipart: al menos una de `front` / `back` / side, `recorded_on` opcional. Persiste source=client. **201** { "photo": {…} } con URLs absolutas.
 
 ### POST /continuity/
 
@@ -189,7 +203,10 @@ Slots `nutrition` / `sport` / `other` con URL absoluta del PDF y resumen de prod
 
 ### GET /academy/
 
-Modo `drip`: `unlocked` si `program_day >= unlock_day`. Modo `all`: todo desbloqueado. Detalle bloqueado → **403**.
+`unlock_mode` es el único modo de la academia, elegido en el panel web (**Contenido disponible**): `"all"` (en la web
+"Siempre") abre todas las lecciones; `"drip"` (en la web "Por días") abre cada lección cuando
+`program_day >= unlock_day`. Vale `null` si `academy_enabled` es `false`. Pedir el detalle de una lección bloqueada
+devuelve **403**.
 
 ## Errores
 
