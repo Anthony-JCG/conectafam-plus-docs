@@ -104,7 +104,7 @@ Sin cabecera → **401** `{"error": "Authentication required."}`; token desconoc
 | POST | `/measurements/` | token + activo | Alta de medida (`source=client`) |
 | GET | `/photos/` | token | Historial de fotos de evolución |
 | POST | `/photos/` | token + activo | Multipart frente/espalda/lado (`source=client`) |
-| GET | `/program/` | token + activo | Archivos por hueco (nutrition/sport/other) + productos |
+| GET | `/program/` | token + activo | Último archivo de cada hueco (nutrition/sport/other) + productos |
 | GET | `/products/` | token | Productos del programa activo |
 | GET | `/products/<id>/` | token | Detalle de producto (popup) |
 | GET | `/academy/` | token + activo | Programas formativos con sus lecciones (cada una con su disponibilidad) + `todays_lesson` |
@@ -267,6 +267,13 @@ devolviendo.
 Cada archivo de programa es un elemento del board del área de clientes del asesor (lo subido se
 guarda ahí, en Nutrición / Deporte / Otros): `title` es el título del elemento y `file_url` su archivo
 o URL. Sin programa activo: `program: null`, huecos vacíos y `products: []`.
+
+La tabla Programa del asesor tiene filas con fecha y una celda por hueco; el cliente siempre sigue el
+**último archivo de cada hueco**. Por eso cada lista `files.<slot>` trae como mucho un archivo: la
+celda con archivo más reciente de ese hueco, por fecha de fila y después por id de fila (una fila
+posterior con esa celda vacía mantiene el archivo anterior). `[]` significa que ninguna fila rellena
+el hueco. `assigned_on` es la fecha de la fila del archivo, que el panel del asesor pone a la fecha
+local cada vez que se rellena una celda; `id` es el id de la celda.
 
 ### GET /products/ · GET /products/<id>/
 

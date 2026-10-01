@@ -104,7 +104,7 @@ Missing header → **401** `{"error": "Authentication required."}`; unknown toke
 | POST | `/measurements/` | token + active | Create measurement (`source=client`) |
 | GET | `/photos/` | token | Progress photo history |
 | POST | `/photos/` | token + active | Multipart front/back/side (`source=client`) |
-| GET | `/program/` | token + active | Files by slot (nutrition/sport/other) + products |
+| GET | `/program/` | token + active | Latest file per slot (nutrition/sport/other) + products |
 | GET | `/products/` | token | Products of the active program |
 | GET | `/products/<id>/` | token | Product detail (popup) |
 | GET | `/academy/` | token + active | Programas formativos with their lessons (per-lesson availability) + `todays_lesson` |
@@ -266,6 +266,12 @@ Rows the advisor deletes in the web pane are only hidden there; both lists keep 
 Every program file is a board item of the advisor's client-area board (uploads are stored there,
 in Nutrición / Deporte / Otros): `title` is the item title and `file_url` its file or URL. Without
 an active program: `program: null`, empty slots and `products: []`.
+
+The advisor's Programa table has dated rows with one cell per slot; the client always follows the
+**latest file of each slot**. Each `files.<slot>` list therefore holds at most one file: the newest
+non-empty cell of that slot, by row date and then row id (a later row with that cell empty keeps the
+previous file). `[]` means no row fills the slot. `assigned_on` is the date of the file's row, which
+the advisor's pane sets to the local date whenever a cell is filled; `id` is the cell id.
 
 ### GET /products/ · GET /products/<id>/
 

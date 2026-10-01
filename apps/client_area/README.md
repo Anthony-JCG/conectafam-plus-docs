@@ -27,7 +27,8 @@ Relationship to the core apps:
 |---|---|
 | `ClientProfile` | OneToOne → `communication.Contact`. Unique `access_code`, `access_status` (`none` / `pending` / `active` / `deactivated`). |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`. The end date is derived (`start_date + duration_days`), never stored. |
-| `ClientProgramFile` | FK → assignment; slot `nutrition` / `sport` / `other`; FK → `BoardItem` (the file; uploads become board items). |
+| `ClientProgramEntry` | Row of the Programa table: FK → assignment (`program_entries`); `assigned_on` (defaults to `timezone.localdate`). Ordered newest first (`-assigned_on`, `-pk`). |
+| `ClientProgramFile` | One cell: FK → entry (`files`); slot `nutrition` / `sport` / `other`, unique per entry; FK → `BoardItem` (the file; uploads become board items). |
 | `ClientProduct` | FK → assignment; `recorded_on`, `products`, `observations`. Plain text, no board item. |
 | `TrainingProgram` | Programa formativo: FK → assignment (`training_programs`); optional FK → `AcademyPlan` (`source_plan`); `name`, `order`. One Academia folder. |
 | `ClientLesson` | FK → `TrainingProgram` (`lessons`); one academy element: `board_item` (the content: uploaded video, YouTube or any picked item), `text`, `attachment_item` (PDF / image board item), `unlock_day`, `order`; optional FK → `AcademyPlanItem` (`source_item`). |
@@ -39,7 +40,9 @@ Relationship to the core apps:
 
 Everything except `AcademyPlan` / `AcademyPlanItem` hangs from `ClientProfile` with `CASCADE`, so
 deleting the contact deletes its whole client area (see the `communication` README). FKs to
-`BoardItem` are `SET_NULL`: deleting a board item leaves the row without it.
+`BoardItem` are `SET_NULL`: deleting a board item leaves the row without it. The exception is
+`ClientProgramFile.board_item` (`CASCADE`): a cell always holds a file, so deleting the item empties
+the cell.
 
 ### Program lifecycle
 
@@ -52,16 +55,35 @@ deleting the contact deletes its whole client area (see the `communication` READ
 - **Activate** (`activate_program`) stores the start date and duration, accepts pending access
   requests (`access_actions.grant_access_for_program`) or activates the profile, and writes an
   `ActivityContact` note.
-- **Duration lock.** Once the program has a start date, `duration_days` is fixed:
-  `ProgramPeriodForm(assignment=...)` renders it disabled (a posted value is ignored) and
-  `activate_program` raises `ValueError` for a different value. The start date stays editable and
-  the end date moves with it.
+- **Period lock.** Once the program has a start date, the start date and `duration_days` are
+  fixed: `ProgramPeriodForm(assignment=...)` renders both disabled (posted values are ignored) and
+  `activate_program` raises `ValueError` for an active program. Only **Desactivar** ends it.
 - **Deactivate / expire.** `deactivate_program` and the daily `expire_due_programs` set
   `deactivated_at` and call `clear_access_on_program_end` (`access_status=none`); the next Fam Fit
   login creates a new `first_access` request.
 - Tools always edit the **working assignment** (`get_or_create_working_assignment`): the latest
   non-deactivated one, or a new draft. An ended assignment keeps its content, but the next program
   starts from a new draft.
+
+### Local dates
+
+Every client-area date default (measurements, photos, products, program rows, the proposed start
+date) and every date computation (program day, progress, days remaining, expiry, reminders) uses
+`timezone.localdate()`, never `date.today()`. With `USE_TZ = True` that is the date in the active
+time zone: `users.middle.TimezoneFromSessionMiddleware` activates the browser time zone saved in
+the session (`session["django_timezone"]`, posted by `core.views`), and falls back to `TIME_ZONE`
+(`Europe/Madrid`) in Celery tasks and requests without it.
+
+### Programa table
+
+- Each `ClientProgramEntry` is a row (date + one cell per column); the client always gets the
+  **latest file of each column**: the newest non-empty cell by row date, then row id. That is what
+  the Fam Fit `/program/` endpoint returns (see the `client_api` README).
+- **Nuevo programa** (`add_program_entry`) adds an empty row dated today.
+- `set_program_file(entry, slot, ...)` fills or replaces a cell with an upload (stored in the
+  column's board folder, see [Board storage](#board-storage)) or a picked board item, and re-dates
+  the row to today.
+- Removing a cell or a row deletes only the program rows; the board items stay in the board.
 
 ### Academia: programas formativos
 
@@ -105,7 +127,7 @@ mode. Plans and copy-from-client keep each element's `unlock_day`.
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **or** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
 | `services/profiles.py` | `get_or_create_client_profile` |
 | `services/programs.py` | Working assignment, `activate_program` / `deactivate_program`, end date, program day, progress, contact status and list filter |
-| `services/content.py` | Measurements, photos, `assign_program_file` / `upload_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
+| `services/content.py` | Measurements, photos, `add_program_entry` / `set_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Advisor's client-area boards and catalog search |
 | `services/pane.py` | Tools pane context, `build_catalog_context`, WhatsApp URLs |
@@ -137,7 +159,7 @@ permissions and shadow folders are described in the `apps/boards` README ("Clien
 
 | Tool | Picker |
 |---|---|
-| Program files (`ClientProgramBoardFileForm.board_item`, "Añadir desde board" button) | One item |
+| Program cell (`ProgramCellForm.board_item`, "Desde board" in the cell menu; opens the column's folder, saved on pick) | One item |
 | Academy content (`ClientLessonForm.board_items`) | Several items, one element each |
 | Academy attachment (`ClientLessonForm.attachment_item`) | One PDF or image |
 | Nutritional products | None |
@@ -151,9 +173,9 @@ the catalog root folder (`ensure_shadow_folder`); for `USER_ROOT`, the catalog f
 
 | Upload | Board folder |
 |---|---|
-| Programa, Tipo Alimentación (`nutrition`) | Nutrición |
-| Programa, Tipo Deporte (`sport`) | Deporte |
-| Programa, Tipo Otros (`other`) | Otros |
+| Programa, column Alimentación (`nutrition`) | Nutrición |
+| Programa, column Deporte (`sport`) | Deporte |
+| Programa, column Otros (`other`) | Otros |
 | Academia: video, YouTube link, attachment | Videoteca / `<program name>` (subfolder created on first upload) |
 
 `const.PROGRAM_SLOT_FOLDERS` maps slots to folders. The Videoteca subfolder is resolved by name on
@@ -194,8 +216,9 @@ URL prefix: **`/client-area/`**
 | `access/accept/` · `activate/` · `deactivate/` | `client_area_accept_access`, `client_area_activate_access`, `client_area_deactivate_access` | Tools partial |
 | `measurements/add/` · `photos/add/` | `client_area_add_measurement`, `client_area_add_photo` | Table partial, or the form with errors |
 | `measurements/hide/` · `photos/hide/` | `client_area_hide_measurement`, `client_area_hide_photo` | Table partial |
-| `program/assign/` | `client_area_assign_program` | Upload (stored in the board): table partial, or the form with errors |
-| `program/assign-from-board/` | `client_area_assign_program_from_board` | Picked board item: table partial, or the form with errors |
+| `program/entries/add/` | `client_area_add_program_entry` | Program table partial (new row) |
+| `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` or `board_item`): program table partial; 422 toast if invalid, 404 for an unknown slot |
+| `program/files/<id>/delete/` · `program/entries/<id>/delete/` | `client_area_delete_program_file`, `client_area_delete_program_entry` | Program table partial |
 | `products/add/` | `client_area_add_product` | Table partial, or the form with errors |
 | `products/<id>/edit/` | `client_area_edit_product` | GET: filled form; POST: table partial, or the form with errors |
 | `products/<id>/delete/` | `client_area_delete_product` | Table partial |
@@ -216,7 +239,7 @@ URL prefix: **`/client-area/`**
 
 ### Shared form modal
 
-- Rows of measurements, photos, program files, products and academy are added from an **Añadir**
+- Rows of measurements, photos, products and academy are added from an **Añadir**
   button that opens `#clientAreaFormModal` (`components/modals/client-area-modals.html`, included by
   `contacts.html` outside `#contactModal`, together with the catalog picker).
 - `data-ca-open-form` opens it with `Modal.show()`, not `data-bs-toggle`, so `#contactModal` stays
@@ -242,9 +265,20 @@ URL prefix: **`/client-area/`**
   picker). Clicking a row opens the same modal filled in (`data-ca-open-form` + `hx-get`); the delete
   cell is `data-ca-row-action`, ignored by the row click, with an `hx-confirm`
   `btn-outline-danger` button. Delete removes the row. The API reads products live (no cache).
-- **Programa** — **Asignar programa** (`ClientProgramFileForm`: Tipo, Fecha, PDF / image upload
-  stored in the board) and, next to it, **Añadir desde board** (`ClientProgramBoardFileForm`: Tipo,
-  Fecha, one picked item). The table shows the board item titles.
+- **Programa** — `client-area-program-table.html` (`#caProgramTable`, swapped `outerHTML`):
+  Fecha, Alimentación, Deporte, Otros and a row delete (`hx-confirm`). Rows come from
+  `services.pane.build_program_rows` (`ProgramCell` per column).
+  - A filled cell (`client-area-program-cell.html`) shows the board item preview
+    (`BoardItem.get_preview_url(allow_network=False)`, i.e. `mosaic_preview`, image or YouTube
+    thumbnail) or a PDF icon, linked to the file; below it the name, truncated with an ellipsis,
+    and `components/tooltip-view-more.html` with the full name.
+  - An empty cell shows a dashed **+** button. Both open a dropdown
+    (`client-area-program-cell-menu.html`): **Subir desde PC** (hidden file input, posted on
+    `change`), **Desde board** (catalog picker opened in the column's folder via
+    `data-ca-picker-folder`; the user can go back to the root) and, when filled, **Quitar**.
+  - Each cell is one form: the picker writes its hidden input (`data-ca-picker-inputs`) and, with
+    `data-ca-picker-submit`, `client_area_tools.js` submits it right away.
+  - **Nuevo programa** below the table adds an empty row. There is no modal for program files.
 - **Academia** — No/Sí toggle saved on change. Closed: one folder per programa formativo (name and
   element count), a "Nuevo programa formativo" field and the **Plantillas** collapse ("Añadir desde
   plantilla", "Copiar de otro cliente" with `hx-confirm`). Open: back button, inline rename,
@@ -264,8 +298,8 @@ URL prefix: **`/client-area/`**
   attachment only, a single element. Each row has the same availability widget, saved on change
   (a checked Siempre or a typed day), and an `hx-confirm` delete.
 - **Progreso** — `ProgramPeriodForm` (start date, duration; the end date is computed live by
-  `client_area_tools.js` and never posted). Draft: **Activar**. Active: **Guardar** and
-  **Desactivar**, with the duration read-only.
+  `client_area_tools.js` and never posted). Draft: **Activar**. Active: only **Desactivar**; the
+  start date and duration are read-only.
 ### Home requests block
 
 `components/card_client_access_requests.html` (`#client-access-requests-section`, included by
@@ -293,6 +327,9 @@ horas"), a WhatsApp button and **Admitir**.
 | `0009_trainingprogram` | Creates `TrainingProgram`; adds nullable `ClientLesson.program` and `attachment_item` on `ClientLesson` / `AcademyPlanItem` |
 | `0010_default_training_programs` | Data (historical models): each assignment with lessons gets one "Programa formativo" (renamable, `source_plan` copied from the assignment) holding them |
 | `0011_lesson_board_content_only` | `ClientLesson.program` becomes required; drops `ClientLesson.assignment`, `video_url`, `video_file`, `attachment`, the same content fields of `AcademyPlanItem`, and `ClientProgramAssignment.source_plan` |
+| `0012_clientprogramentry` | Creates `ClientProgramEntry`; adds nullable `ClientProgramFile.entry` |
+| `0013_program_files_to_entries` | Data (historical models): drops files without a board item; groups the rest into one row per (assignment, date), a repeated column opening another row |
+| `0014_program_file_cell` | Drops `ClientProgramFile.assignment` / `assigned_on`; `entry` and `board_item` (`CASCADE`) become required; unique (`entry`, `slot`) |
 
 `AcademyPlanItem` rows saved from "all"-mode assignments keep their previous day. Own lesson content
 in the fields dropped by `0011` (video URL, video file, attachment) is not converted to board items.

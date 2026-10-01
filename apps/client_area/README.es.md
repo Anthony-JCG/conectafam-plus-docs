@@ -28,7 +28,8 @@ Relación con las apps núcleo:
 |---|---|
 | `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único y `access_status` (`none` / `pending` / `active` / `deactivated`). |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`. La fecha de fin se calcula (`start_date + duration_days`) y no se guarda. |
-| `ClientProgramFile` | FK → asignación; hueco `nutrition` / `sport` / `other`; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
+| `ClientProgramEntry` | Fila de la tabla Programa: FK → asignación (`program_entries`); `assigned_on` (por defecto `timezone.localdate`). Ordenadas de más nueva a más antigua (`-assigned_on`, `-pk`). |
+| `ClientProgramFile` | Una celda: FK → fila (`files`); hueco `nutrition` / `sport` / `other`, único por fila; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
 | `ClientProduct` | FK → asignación; `recorded_on`, `products`, `observations`. Solo texto, sin elemento de board. |
 | `TrainingProgram` | Programa formativo: FK → asignación (`training_programs`); FK opcional → `AcademyPlan` (`source_plan`); `name`, `order`. Una carpeta de Academia. |
 | `ClientLesson` | FK → `TrainingProgram` (`lessons`); un elemento de academia: `board_item` (el contenido: vídeo subido, YouTube o cualquier elemento elegido), `text`, `attachment_item` (elemento PDF / imagen del board), `unlock_day`, `order`; FK opcional → `AcademyPlanItem` (`source_item`). |
@@ -40,7 +41,9 @@ Relación con las apps núcleo:
 
 Todo salvo `AcademyPlan` / `AcademyPlanItem` cuelga de `ClientProfile` con `CASCADE`: al borrar el
 contacto se borra su área de cliente completa (ver el README de `communication`). Los FK a
-`BoardItem` son `SET_NULL`: si se borra el elemento del board, la fila se queda sin él.
+`BoardItem` son `SET_NULL`: si se borra el elemento del board, la fila se queda sin él. La excepción
+es `ClientProgramFile.board_item` (`CASCADE`): una celda siempre tiene archivo, así que borrar el
+elemento vacía la celda.
 
 ### Ciclo del programa
 
@@ -53,16 +56,38 @@ contacto se borra su área de cliente completa (ver el README de `communication`
 - **Activar** (`activate_program`) guarda la fecha de inicio y la duración, acepta las solicitudes
   de acceso pendientes (`access_actions.grant_access_for_program`) o, si no hay, activa el perfil, y
   deja una nota en `ActivityContact`.
-- **Duración bloqueada.** En cuanto el programa tiene fecha de inicio, `duration_days` ya no
-  cambia: `ProgramPeriodForm(assignment=...)` pinta el campo desactivado (se ignora lo que llegue en
-  el POST) y `activate_program` lanza `ValueError` si recibe otra duración. La fecha de inicio sí se
-  puede cambiar, y la de fin se mueve con ella.
+- **Fechas bloqueadas.** En cuanto el programa tiene fecha de inicio, ni esa fecha ni
+  `duration_days` cambian: `ProgramPeriodForm(assignment=...)` pinta los dos campos desactivados (se
+  ignora lo que llegue en el POST) y `activate_program` lanza `ValueError` si el programa ya está
+  activo. Solo **Desactivar** lo termina.
 - **Desactivar / expirar.** `deactivate_program` y la tarea diaria `expire_due_programs` rellenan
   `deactivated_at` y llaman a `clear_access_on_program_end` (`access_status=none`); el siguiente
   login en Fam Fit crea una nueva solicitud `first_access`.
 - Las herramientas siempre editan la **asignación de trabajo** (`get_or_create_working_assignment`):
   la última sin desactivar o, si no hay, un borrador nuevo. Una asignación terminada conserva su
   contenido, pero el siguiente programa arranca desde un borrador nuevo.
+
+### Fechas locales
+
+Todas las fechas por defecto del área de cliente (medidas, fotos, productos, filas del programa,
+la fecha de inicio propuesta) y todos los cálculos de fechas (día del programa, progreso, días
+restantes, expiración, recordatorios) usan `timezone.localdate()`, nunca `date.today()`. Con
+`USE_TZ = True` es la fecha en la zona horaria activa: `users.middle.TimezoneFromSessionMiddleware`
+activa la zona del navegador guardada en la sesión (`session["django_timezone"]`, que envía
+`core.views`); en las tareas de Celery y en peticiones sin ella se usa `TIME_ZONE` (`Europe/Madrid`).
+
+### Tabla Programa
+
+- Cada `ClientProgramEntry` es una fila (fecha + una celda por columna); el cliente siempre recibe
+  el **último archivo de cada columna**: la celda con archivo más reciente por fecha de fila y,
+  después, por id de fila. Es lo que devuelve el endpoint `/program/` de Fam Fit (ver el README de
+  `client_api`).
+- **Nuevo programa** (`add_program_entry`) añade una fila vacía con la fecha de hoy.
+- `set_program_file(entry, slot, ...)` rellena o sustituye una celda con un archivo subido (se
+  guarda en la carpeta del board de su columna, ver [Almacenamiento en el board](#almacenamiento-en-el-board))
+  o con un elemento elegido del board, y pone la fecha de la fila a hoy.
+- Quitar una celda o borrar una fila solo borra las filas del programa; los elementos siguen en el
+  board.
 
 ### Academia: programas formativos
 
@@ -108,7 +133,7 @@ cada elemento.
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
 | `services/profiles.py` | `get_or_create_client_profile` |
 | `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
-| `services/content.py` | Medidas, fotos, `assign_program_file` / `upload_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
+| `services/content.py` | Medidas, fotos, `add_program_entry` / `set_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
 | `services/pane.py` | Contexto del panel, `build_catalog_context`, URLs de WhatsApp |
@@ -142,7 +167,7 @@ FAM TEAM. Almacenamiento, permisos y carpetas sombra están en el README de `app
 
 | Herramienta | Selector |
 |---|---|
-| Archivos de programa (`ClientProgramBoardFileForm.board_item`, botón "Añadir desde board") | Un elemento |
+| Celda del programa (`ProgramCellForm.board_item`, "Desde board" en el menú de la celda; abre la carpeta de la columna y guarda al elegir) | Un elemento |
 | Contenido de academia (`ClientLessonForm.board_items`) | Varios elementos, uno por elemento de academia |
 | Adjunto de academia (`ClientLessonForm.attachment_item`) | Un PDF o una imagen |
 | Productos nutricionales | Ninguno |
@@ -156,9 +181,9 @@ carpeta raíz del catálogo (`ensure_shadow_folder`); para `USER_ROOT`, la propi
 
 | Subida | Carpeta del board |
 |---|---|
-| Programa, Tipo Alimentación (`nutrition`) | Nutrición |
-| Programa, Tipo Deporte (`sport`) | Deporte |
-| Programa, Tipo Otros (`other`) | Otros |
+| Programa, columna Alimentación (`nutrition`) | Nutrición |
+| Programa, columna Deporte (`sport`) | Deporte |
+| Programa, columna Otros (`other`) | Otros |
 | Academia: vídeo, enlace de YouTube, adjunto | Videoteca / `<nombre del programa>` (la subcarpeta se crea con la primera subida) |
 
 `const.PROGRAM_SLOT_FOLDERS` relaciona cada hueco con su carpeta. La subcarpeta de Videoteca se busca
@@ -199,8 +224,9 @@ Prefijo de URL: **`/client-area/`**
 | `access/accept/` · `activate/` · `deactivate/` | `client_area_accept_access`, `client_area_activate_access`, `client_area_deactivate_access` | Parcial de herramientas |
 | `measurements/add/` · `photos/add/` | `client_area_add_measurement`, `client_area_add_photo` | Parcial de la tabla, o el formulario con errores |
 | `measurements/hide/` · `photos/hide/` | `client_area_hide_measurement`, `client_area_hide_photo` | Parcial de la tabla |
-| `program/assign/` | `client_area_assign_program` | Subida (se guarda en el board): parcial de la tabla, o el formulario con errores |
-| `program/assign-from-board/` | `client_area_assign_program_from_board` | Elemento elegido del board: parcial de la tabla, o el formulario con errores |
+| `program/entries/add/` | `client_area_add_program_entry` | Parcial de la tabla del programa (fila nueva) |
+| `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` o `board_item`): parcial de la tabla del programa; toast 422 si no es válido, 404 si el hueco no existe |
+| `program/files/<id>/delete/` · `program/entries/<id>/delete/` | `client_area_delete_program_file`, `client_area_delete_program_entry` | Parcial de la tabla del programa |
 | `products/add/` | `client_area_add_product` | Parcial de la tabla, o el formulario con errores |
 | `products/<id>/edit/` | `client_area_edit_product` | GET: formulario relleno; POST: parcial de la tabla, o el formulario con errores |
 | `products/<id>/delete/` | `client_area_delete_product` | Parcial de la tabla |
@@ -221,7 +247,7 @@ Prefijo de URL: **`/client-area/`**
 
 ### Modal de formulario compartido
 
-- Las filas de evolución, fotos, archivos de programa, productos y academia se añaden con un botón
+- Las filas de evolución, fotos, productos y academia se añaden con un botón
   **Añadir** que abre `#clientAreaFormModal` (`components/modals/client-area-modals.html`, incluido
   en `contacts.html` fuera de `#contactModal`, junto al selector del catálogo).
 - `data-ca-open-form` lo abre con `Modal.show()` y no con `data-bs-toggle`, para que
@@ -250,9 +276,21 @@ Prefijo de URL: **`/client-area/`**
   `hx-get`); la celda de borrar es `data-ca-row-action`, el clic de la fila no la tiene en cuenta, y
   lleva un botón `btn-outline-danger` con `hx-confirm`. Borrar elimina la fila. La API lee los
   productos en directo, sin caché.
-- **Programa** — **Asignar programa** (`ClientProgramFileForm`: Tipo, Fecha y un PDF o imagen que
-  se guarda en el board) y, al lado, **Añadir desde board** (`ClientProgramBoardFileForm`: Tipo,
-  Fecha y un elemento elegido). La tabla muestra el título del elemento del board.
+- **Programa** — `client-area-program-table.html` (`#caProgramTable`, se sustituye con `outerHTML`):
+  Fecha, Alimentación, Deporte, Otros y un botón para borrar la fila (`hx-confirm`). Las filas
+  salen de `services.pane.build_program_rows` (un `ProgramCell` por columna).
+  - Una celda con archivo (`client-area-program-cell.html`) muestra la vista previa del elemento
+    del board (`BoardItem.get_preview_url(allow_network=False)`: `mosaic_preview`, la imagen o la
+    miniatura de YouTube) o un icono de PDF, con enlace al archivo; debajo, el nombre recortado con
+    puntos suspensivos y `components/tooltip-view-more.html` con el nombre completo.
+  - Una celda vacía muestra un botón **+** con borde discontinuo. Los dos abren un desplegable
+    (`client-area-program-cell-menu.html`): **Subir desde PC** (input de archivo oculto que se envía
+    en `change`), **Desde board** (el selector del catálogo se abre en la carpeta de la columna con
+    `data-ca-picker-folder`; se puede volver a la raíz) y, si hay archivo, **Quitar**.
+  - Cada celda es un formulario: el selector escribe su input oculto (`data-ca-picker-inputs`) y,
+    con `data-ca-picker-submit`, `client_area_tools.js` lo envía en el momento.
+  - **Nuevo programa**, debajo de la tabla, añade una fila vacía. Los archivos de programa ya no
+    usan modal.
 - **Academia** — interruptor No/Sí que se guarda al cambiarlo. Cerrada: una carpeta por programa
   formativo (nombre y número de contenidos), un campo "Nuevo programa formativo" y el desplegable
   **Plantillas** ("Añadir desde plantilla" y "Copiar de otro cliente", con `hx-confirm`). Abierta:
@@ -274,8 +312,8 @@ Prefijo de URL: **`/client-area/`**
   que se guarda al cambiarlo (al marcar Siempre o al escribir un día), y un botón de borrar con
   `hx-confirm`.
 - **Progreso** — `ProgramPeriodForm` (fecha de inicio y duración; la fecha de fin la calcula
-  `client_area_tools.js` al momento y nunca se envía). En borrador: **Activar**. Activo: **Guardar** y
-  **Desactivar**, con la duración de solo lectura.
+  `client_area_tools.js` al momento y nunca se envía). En borrador: **Activar**. Activo: solo
+  **Desactivar**; la fecha de inicio y la duración son de solo lectura.
 ### Bloque de solicitudes del home
 
 `components/card_client_access_requests.html` (`#client-access-requests-section`, lo incluye
@@ -304,6 +342,9 @@ del contacto, qué pide (acceso, o continuar el programa con el número de pedid
 | `0009_trainingprogram` | Crea `TrainingProgram`; añade `ClientLesson.program` (opcional por ahora) y `attachment_item` en `ClientLesson` / `AcademyPlanItem` |
 | `0010_default_training_programs` | Datos (modelos históricos): cada asignación con lecciones recibe un "Programa formativo" (renombrable, con el `source_plan` de la asignación) que las agrupa |
 | `0011_lesson_board_content_only` | `ClientLesson.program` pasa a ser obligatorio; elimina `ClientLesson.assignment`, `video_url`, `video_file`, `attachment`, los mismos campos de contenido de `AcademyPlanItem` y `ClientProgramAssignment.source_plan` |
+| `0012_clientprogramentry` | Crea `ClientProgramEntry`; añade `ClientProgramFile.entry` (nullable) |
+| `0013_program_files_to_entries` | Datos (modelos históricos): borra los archivos sin elemento del board; agrupa el resto en una fila por (asignación, fecha), y una columna repetida abre otra fila |
+| `0014_program_file_cell` | Elimina `ClientProgramFile.assignment` / `assigned_on`; `entry` y `board_item` (`CASCADE`) pasan a ser obligatorios; único (`entry`, `slot`) |
 
 Los `AcademyPlanItem` guardados desde asignaciones en modo "all" conservan el día que tenían. El
 contenido propio de las lecciones en los campos que borra `0011` (URL de vídeo, vídeo, adjunto) no se
