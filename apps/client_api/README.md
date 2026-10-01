@@ -137,7 +137,7 @@ there is none.
 | Field | Type | Notes |
 |---|---|---|
 | `day` | int | 1-based program day (`1` before the start date) |
-| `start_date` | `YYYY-MM-DD` | Set by the advisor; can still be moved after activation |
+| `start_date` | `YYYY-MM-DD` | Set by the advisor; fixed once the program is activated |
 | `duration_days` | int | Set by the advisor; fixed once the program is activated |
 | `end_date` | `YYYY-MM-DD` | Always `start_date + duration_days` (derived, never stored) |
 | `progress_percent` | int | 0–100 |
@@ -170,12 +170,17 @@ the next request.
 | `unlock_day` | int | `0` = always available ("Siempre"); `N >= 1` = available from program day `N` ("Día N") |
 | `order` | int | Display order inside its program; sort by it |
 | `unlocked` | bool | `unlock_day == 0`, or `program_day >= unlock_day` |
+| `thumbnail_url` | string \| null | Absolute preview of the content board item, the image the board shows: YouTube `hqdefault` thumbnail, `mosaic_preview` of PDFs / images / pages. `null` when the board has none (uploaded videos, text, PDFs whose preview could not be generated). Sent for locked lessons too |
+| `video_url` | string | YouTube URL (`""` otherwise or while locked) |
+| `youtube_video_id` | string \| null | 11-char id parsed from `video_url`, for an embedded YouTube player |
+| `video_file_url` | string | Absolute file URL of an uploaded video, playable with a native player (`""` otherwise or while locked) |
 
-Detail payloads (`todays_lesson`, `/academy/lessons/<id>/`) add `video_url`, `video_file_url`,
-`text` and `attachment_url` (strings, `""` when empty). The content of a lesson is always a board
-item of the advisor's client-area board (uploads from the pane are stored there first): `text` is
-the lesson text, `attachment_url` the file of its attachment item, and the content item fills the
-key of its type when it is still empty:
+The video keys come in the `programs[].lessons` list as well, so the app can play a video inline
+without opening the detail. Detail payloads (`todays_lesson`, `/academy/lessons/<id>/`) add `text`
+and `attachment_url` (strings, `""` when empty). The content of a lesson is always a board item of
+the advisor's client-area board (uploads from the pane are stored there first): `text` is the
+lesson text, `attachment_url` the file of its attachment item, and the content item fills the key
+of its type when it is still empty:
 
 | Item type | Key |
 |---|---|
@@ -255,7 +260,7 @@ Rows the advisor deletes in the web pane are only hidden there; both lists keep 
 {
   "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "files": {
-    "nutrition": [{ "id": 1, "slot": "nutrition", "title": "plan.pdf", "file_url": "https://...", "assigned_on": "2026-09-25" }],
+    "nutrition": [{ "id": 1, "slot": "nutrition", "title": "plan", "file_url": "https://.../plan.pdf", "thumbnail_url": "https://.../mosaic_previews/3f9c0a1b2c4d.webp", "assigned_on": "2026-09-25" }],
     "sport": [],
     "other": []
   },
@@ -264,8 +269,10 @@ Rows the advisor deletes in the web pane are only hidden there; both lists keep 
 ```
 
 Every program file is a board item of the advisor's client-area board (uploads are stored there,
-in Nutrición / Deporte / Otros): `title` is the item title and `file_url` its file or URL. Without
-an active program: `program: null`, empty slots and `products: []`.
+in Nutrición / Deporte / Otros): `title` is the item title, `file_url` its file or URL and
+`thumbnail_url` the absolute preview the web grid shows (`mosaic_preview` of a PDF or image, YouTube
+thumbnail), or `null` when the board has none (e.g. a PDF whose first page could not be rendered).
+Without an active program: `program: null`, empty slots and `products: []`.
 
 The advisor's Programa table has dated rows with one cell per slot; the client always follows the
 **latest file of each slot**. Each `files.<slot>` list therefore holds at most one file: the newest
@@ -287,23 +294,23 @@ the advisor's pane sets to the local date whenever a cell is filled; `id` is the
 {
   "academy_enabled": true,
   "program_day": 10,
-  "todays_lesson": { "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true, "video_url": "https://www.youtube.com/watch?v=...", "video_file_url": "", "text": "", "attachment_url": "" },
+  "todays_lesson": { "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true, "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "youtube_video_id": "dQw4w9WgXcQ", "video_file_url": "", "text": "", "attachment_url": "" },
   "programs": [
     {
       "id": 7,
       "name": "Deporte en casa",
       "order": 1,
       "lessons": [
-        { "id": 4, "program_id": 7, "title": "Bienvenida", "unlock_day": 0, "order": 1, "unlocked": true },
-        { "id": 1, "program_id": 7, "title": "Dia 1", "unlock_day": 1, "order": 2, "unlocked": true },
-        { "id": 2, "program_id": 7, "title": "Dia 20", "unlock_day": 20, "order": 3, "unlocked": false }
+        { "id": 4, "program_id": 7, "title": "Bienvenida", "unlock_day": 0, "order": 1, "unlocked": true, "thumbnail_url": null, "video_url": "", "youtube_video_id": null, "video_file_url": "https://.../clase.mp4" },
+        { "id": 1, "program_id": 7, "title": "Dia 1", "unlock_day": 1, "order": 2, "unlocked": true, "thumbnail_url": "https://.../mosaic_previews/ab12.webp", "video_url": "", "youtube_video_id": null, "video_file_url": "" },
+        { "id": 2, "program_id": 7, "title": "Dia 20", "unlock_day": 20, "order": 3, "unlocked": false, "thumbnail_url": "https://i.ytimg.com/vi/aBcDeFgHiJk/hqdefault.jpg", "video_url": "", "youtube_video_id": null, "video_file_url": "" }
       ]
     },
     {
       "id": 8,
       "name": "Desarrollo personal",
       "order": 2,
-      "lessons": [{ "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true }]
+      "lessons": [{ "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true, "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "youtube_video_id": "dQw4w9WgXcQ", "video_file_url": "" }]
     }
   ]
 }
@@ -314,7 +321,7 @@ the advisor's pane sets to the local date whenever a cell is filled; `id` is the
 | `academy_enabled` | Advisor's No/Sí toggle; `false` also without an active program |
 | `program_day` | 1-based program day, `null` without a start date |
 | `todays_lesson` | Detail of the first lesson (programs, then lessons, in order) whose `unlock_day` equals `program_day`, or `null`. `unlock_day: 0` lessons are never `todays_lesson` |
-| `programs` | Programas formativos (the Academia folders), sorted by `order`: `id`, `name`, `order` and `lessons` (Lesson list, without detail keys, sorted by `order`). Each lesson carries its own `unlock_day`; both kinds may be mixed |
+| `programs` | Programas formativos (the Academia folders), sorted by `order`: `id`, `name`, `order` and `lessons` (Lesson list with thumbnail and video keys, without `text` / `attachment_url`, sorted by `order`). Each lesson carries its own `unlock_day`; both kinds may be mixed |
 
 When `academy_enabled` is `false`: `programs: []`, `todays_lesson: null`.
 

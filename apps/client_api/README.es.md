@@ -137,7 +137,7 @@ ninguna.
 | Campo | Tipo | Notas |
 |---|---|---|
 | `day` | int | Día del programa empezando en 1 (`1` antes de la fecha de inicio) |
-| `start_date` | `YYYY-MM-DD` | La fija el asesor; puede moverla después de activar |
+| `start_date` | `YYYY-MM-DD` | La fija el asesor; no cambia una vez activado el programa |
 | `duration_days` | int | La fija el asesor; no cambia una vez activado el programa |
 | `end_date` | `YYYY-MM-DD` | Siempre `start_date + duration_days` (se calcula, no se guarda) |
 | `progress_percent` | int | De 0 a 100 |
@@ -170,9 +170,14 @@ panel aparece en la siguiente petición.
 | `unlock_day` | int | `0` = siempre disponible ("Siempre"); `N >= 1` = disponible desde el día `N` del programa ("Día N") |
 | `order` | int | Orden dentro de su programa; ordenad por él |
 | `unlocked` | bool | `unlock_day == 0`, o `program_day >= unlock_day` |
+| `thumbnail_url` | string \| null | Vista previa absoluta del elemento de contenido, la imagen que muestra el board: miniatura `hqdefault` de YouTube, `mosaic_preview` de PDFs / imágenes / páginas. `null` si el board no tiene (vídeos subidos, texto, PDFs cuya vista previa no se pudo generar). También llega en lecciones bloqueadas |
+| `video_url` | string | URL de YouTube (`""` si no lo es o si está bloqueada) |
+| `youtube_video_id` | string \| null | Id de 11 caracteres sacado de `video_url`, para un reproductor de YouTube embebido |
+| `video_file_url` | string | URL absoluta del vídeo subido, reproducible con un reproductor nativo (`""` si no lo es o si está bloqueada) |
 
-Los detalles (`todays_lesson`, `/academy/lessons/<id>/`) añaden `video_url`, `video_file_url`,
-`text` y `attachment_url` (cadenas, `""` si están vacías). El contenido de una lección siempre es un
+Las claves de vídeo también llegan en la lista `programs[].lessons`, así que la app puede reproducir
+un vídeo en la propia lista sin abrir el detalle. Los detalles (`todays_lesson`,
+`/academy/lessons/<id>/`) añaden `text` y `attachment_url` (cadenas, `""` si están vacías). El contenido de una lección siempre es un
 elemento del board del área de clientes del asesor (lo que se sube desde el panel se guarda antes
 ahí): `text` es el texto de la lección, `attachment_url` el archivo de su adjunto, y el elemento de
 contenido rellena la clave de su tipo si sigue vacía:
@@ -256,7 +261,7 @@ devolviendo.
 {
   "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "files": {
-    "nutrition": [{ "id": 1, "slot": "nutrition", "title": "plan.pdf", "file_url": "https://...", "assigned_on": "2026-09-25" }],
+    "nutrition": [{ "id": 1, "slot": "nutrition", "title": "plan", "file_url": "https://.../plan.pdf", "thumbnail_url": "https://.../mosaic_previews/3f9c0a1b2c4d.webp", "assigned_on": "2026-09-25" }],
     "sport": [],
     "other": []
   },
@@ -265,8 +270,10 @@ devolviendo.
 ```
 
 Cada archivo de programa es un elemento del board del área de clientes del asesor (lo subido se
-guarda ahí, en Nutrición / Deporte / Otros): `title` es el título del elemento y `file_url` su archivo
-o URL. Sin programa activo: `program: null`, huecos vacíos y `products: []`.
+guarda ahí, en Nutrición / Deporte / Otros): `title` es el título del elemento, `file_url` su archivo
+o URL y `thumbnail_url` la vista previa absoluta que muestra la tabla web (`mosaic_preview` de un PDF
+o imagen, miniatura de YouTube), o `null` si el board no tiene (p. ej. un PDF cuya primera página no
+se pudo renderizar). Sin programa activo: `program: null`, huecos vacíos y `products: []`.
 
 La tabla Programa del asesor tiene filas con fecha y una celda por hueco; el cliente siempre sigue el
 **último archivo de cada hueco**. Por eso cada lista `files.<slot>` trae como mucho un archivo: la
@@ -289,23 +296,23 @@ local cada vez que se rellena una celda; `id` es el id de la celda.
 {
   "academy_enabled": true,
   "program_day": 10,
-  "todays_lesson": { "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true, "video_url": "https://www.youtube.com/watch?v=...", "video_file_url": "", "text": "", "attachment_url": "" },
+  "todays_lesson": { "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true, "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "youtube_video_id": "dQw4w9WgXcQ", "video_file_url": "", "text": "", "attachment_url": "" },
   "programs": [
     {
       "id": 7,
       "name": "Deporte en casa",
       "order": 1,
       "lessons": [
-        { "id": 4, "program_id": 7, "title": "Bienvenida", "unlock_day": 0, "order": 1, "unlocked": true },
-        { "id": 1, "program_id": 7, "title": "Dia 1", "unlock_day": 1, "order": 2, "unlocked": true },
-        { "id": 2, "program_id": 7, "title": "Dia 20", "unlock_day": 20, "order": 3, "unlocked": false }
+        { "id": 4, "program_id": 7, "title": "Bienvenida", "unlock_day": 0, "order": 1, "unlocked": true, "thumbnail_url": null, "video_url": "", "youtube_video_id": null, "video_file_url": "https://.../clase.mp4" },
+        { "id": 1, "program_id": 7, "title": "Dia 1", "unlock_day": 1, "order": 2, "unlocked": true, "thumbnail_url": "https://.../mosaic_previews/ab12.webp", "video_url": "", "youtube_video_id": null, "video_file_url": "" },
+        { "id": 2, "program_id": 7, "title": "Dia 20", "unlock_day": 20, "order": 3, "unlocked": false, "thumbnail_url": "https://i.ytimg.com/vi/aBcDeFgHiJk/hqdefault.jpg", "video_url": "", "youtube_video_id": null, "video_file_url": "" }
       ]
     },
     {
       "id": 8,
       "name": "Desarrollo personal",
       "order": 2,
-      "lessons": [{ "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true }]
+      "lessons": [{ "id": 3, "program_id": 8, "title": "Hoy", "unlock_day": 10, "order": 1, "unlocked": true, "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "youtube_video_id": "dQw4w9WgXcQ", "video_file_url": "" }]
     }
   ]
 }
@@ -316,7 +323,7 @@ local cada vez que se rellena una celda; `id` es el id de la celda.
 | `academy_enabled` | Interruptor No/Sí del asesor; también es `false` si no hay programa activo |
 | `program_day` | Día del programa empezando en 1; `null` sin fecha de inicio |
 | `todays_lesson` | Detalle de la primera lección (programas y luego lecciones, en orden) cuyo `unlock_day` coincide con `program_day`, o `null`. Las lecciones con `unlock_day: 0` nunca son `todays_lesson` |
-| `programs` | Programas formativos (las carpetas de Academia) ordenados por `order`: `id`, `name`, `order` y `lessons` (lista de Lesson sin claves de detalle, ordenada por `order`). Cada lección lleva su `unlock_day` y se pueden mezclar los dos tipos |
+| `programs` | Programas formativos (las carpetas de Academia) ordenados por `order`: `id`, `name`, `order` y `lessons` (lista de Lesson con miniatura y claves de vídeo, sin `text` / `attachment_url`, ordenada por `order`). Cada lección lleva su `unlock_day` y se pueden mezclar los dos tipos |
 
 Con `academy_enabled` a `false`: `programs: []` y `todays_lesson: null`.
 
