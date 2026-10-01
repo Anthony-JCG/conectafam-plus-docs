@@ -66,7 +66,10 @@ is the login rate limit.
 | `POST /continuity/` | `none` → `pending` + `ClientAccessRequest(continuity)` |
 | Advisor accepts the request, turns access on, or activates the program (pending requests are accepted) | `active` |
 | Advisor turns access off | `deactivated` |
-| Program ends: advisor deactivates it, the daily expiry job ends it, or the advisor's client-area add-on lapses | `none` ("Sin acceso"); the next login creates a new request |
+| Program ends: advisor deactivates it, the hourly expiry job ends it after its last day in the client's zone, or the advisor's client-area add-on lapses | `none` ("Sin acceso"); the next login creates a new request |
+
+A renewal starts the same program again with a new period: `/program/` files, products and
+`/academy/` (with the lessons already unlocked) are kept; nothing is deleted when a program ends.
 
 Device tokens are not revoked when access changes: authenticated calls keep returning **200** on
 the token-only endpoints and **403** `{"error": "Access is not active.", "access_status": "..."}`
@@ -80,6 +83,20 @@ Authorization: Token <token>
 
 Missing header → **401** `{"error": "Authentication required."}`; unknown token → **401**
 `{"error": "Invalid or expired token."}`.
+
+### Client time zone
+
+Send the device's IANA zone on login and on every authenticated request:
+
+```
+X-Timezone: America/Guayaquil
+```
+
+The server stores it on the profile when it changes (unknown names are ignored, never an error).
+The client's calendar follows it everywhere, whoever looks at it (app, advisor web, Celery jobs):
+program `day` / `days_remaining` / scheduled `status`, unlocked lessons, the default and the
+maximum of `recorded_on`, the end of the program and the 08:00 reminders. Without it the server's
+zone (`settings.TIME_ZONE`) is used.
 
 ### Refresh / logout
 
@@ -101,9 +118,9 @@ Missing header → **401** `{"error": "Authentication required."}`; unknown toke
 | GET | `/me/` | token | Basic profile + program summary |
 | GET | `/home/` | token + active | Greeting, current metrics, weekly deltas, advisor WhatsApp |
 | GET | `/measurements/` | token | Measurement history (charts) |
-| POST | `/measurements/` | token + active | Create measurement (`source=client`) |
+| POST | `/measurements/` | token + active | Save the day's measurement (upsert per date) |
 | GET | `/photos/` | token | Progress photo history |
-| POST | `/photos/` | token + active | Multipart front/back/side (`source=client`) |
+| POST | `/photos/` | token + active | Save the day's photos, multipart front/back/side (upsert per date) |
 | GET | `/program/` | token + active | Latest file per slot (nutrition/sport/other) + products |
 | GET | `/products/` | token | Products of the active program |
 | GET | `/products/<id>/` | token | Product detail (popup) |
@@ -120,10 +137,13 @@ Unexpected errors return **500** `{"error": "Internal server error."}` on every 
 ### Program
 
 `program` in `/me/`, `/home/` and `/program/` describes the active assignment, or is `null` when
-there is none.
+there is none. `/me/` and `/home/` also return a program **scheduled** to start later (a first
+program or a renewal) so the app can show "Tu programa inicia {start_date}"; `/program/` and
+`/academy/` wait for the start date.
 
 ```json
 {
+  "status": "active",
   "day": 10,
   "start_date": "2026-09-02",
   "duration_days": 90,
@@ -136,13 +156,24 @@ there is none.
 
 | Field | Type | Notes |
 |---|---|---|
-| `day` | int | 1-based program day (`1` before the start date) |
+| `status` | string | `active`, or `scheduled` (starts on `start_date`) |
+| `day` | int \| null | 1-based program day; `null` while scheduled. A renewal restarts it at 1 |
 | `start_date` | `YYYY-MM-DD` | Set by the advisor; fixed once the program is activated |
 | `duration_days` | int | Set by the advisor; fixed once the program is activated |
 | `end_date` | `YYYY-MM-DD` | Always `start_date + duration_days` (derived, never stored) |
 | `progress_percent` | int | 0–100 |
-| `days_remaining` | int | Days until `end_date` |
-| `is_active` | bool | Inside the program window and not deactivated |
+| `days_remaining` | int \| null | Days until `end_date`; `null` while scheduled |
+| `is_active` | bool | Inside the program window and not deactivated (`false` while scheduled) |
+
+Scheduled program in `/me/`:
+
+```json
+{
+  "access_status": "active",
+  "program": { "status": "scheduled", "day": null, "start_date": "2026-10-06", "duration_days": 90, "end_date": "2027-01-04", "progress_percent": 0, "days_remaining": null, "is_active": false },
+  "program_finished": false
+}
+```
 
 ### Product
 
@@ -169,7 +200,7 @@ the next request.
 | `title` | string | Board item title, else the first 80 chars of the text, else the attachment title, else `Lesson <id>` |
 | `unlock_day` | int | `0` = always available ("Siempre"); `N >= 1` = available from program day `N` ("Día N") |
 | `order` | int | Display order inside its program; sort by it |
-| `unlocked` | bool | `unlock_day == 0`, or `program_day >= unlock_day` |
+| `unlocked` | bool | `unlock_day == 0`, `program_day >= unlock_day`, or a day already reached in a previous period (a renewal restarts `program_day` but keeps what was unlocked) |
 | `thumbnail_url` | string \| null | Absolute preview of the content board item, the image the board shows: YouTube `hqdefault` thumbnail, `mosaic_preview` of PDFs / images / pages. `null` when the board has none (uploaded videos, text, PDFs whose preview could not be generated). Sent for locked lessons too |
 | `video_url` | string | YouTube URL (`""` otherwise or while locked) |
 | `youtube_video_id` | string \| null | 11-char id parsed from `video_url`, for an embedded YouTube player |
@@ -201,12 +232,13 @@ of its type when it is still empty:
   "name": "Maria Castillo",
   "access_status": "active",
   "access_code": "ABCD2345",
-  "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
+  "program": { "status": "active", "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "program_finished": false
 }
 ```
 
-`program_finished` is `true` when access is `active` but there is no active program. Once a program
+`program_finished` is `true` when access is `active` but no program runs (neither active nor
+scheduled). Once a program
 ends, access goes back to `none`, so the response has `access_status: "none"`, `program: null` and
 `program_finished: false`; the app offers `POST /continuity/`.
 
@@ -216,7 +248,7 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
 {
   "greeting_name": "Maria Castillo",
   "access_status": "active",
-  "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
+  "program": { "status": "active", "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "current": {
     "id": 12,
     "recorded_on": "2026-09-25",
@@ -241,16 +273,41 @@ omitted client-side and there are no server-side scale formulas.
 
 ### GET · POST /measurements/
 
+**One record per day.** A client has at most one measurement and one photo record per date. The
+app saves with the device's **local date** in `recorded_on` (without it, today in the client's
+zone, see `X-Timezone`) and preloads that day's record first: a second save the same day
+updates it instead of adding a row.
+
 - **GET** → **200** `{"measurements": [Measurement, ...]}`, newest first.
-- **POST** JSON: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`, optional `bioimpedance`, optional
-  `recorded_on` (defaults to today). Stored with `source=client`; the advisor gets an
-  `ActivityContact` note and a web push. **201** `{"measurement": {...}}`, **400** on validation.
+  `?recorded_on=YYYY-MM-DD` returns only that day (`[]` or one row) to preload the form.
+- **POST** JSON upsert of `recorded_on`: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`,
+  `bioimpedance`. Only the keys sent change; `null` clears a value; `bioimpedance` is replaced
+  whole. `recorded_on` may be at most the client's tomorrow (slack for a stale zone).
+  - **201** `{"measurement": {...}, "created": true}` the first save of the day (`source=client`;
+    the advisor gets an `ActivityContact` note and a web push).
+  - **200** `{"measurement": {...}, "created": false}` when the day already had a record (no new
+    notification; `source` keeps who created it).
+  - **400** invalid JSON, bad / future `recorded_on`, or a non-numeric value.
+
+Second save of the day (`chest` was saved earlier and stays):
+
+```json
+{ "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80 }
+```
+
+```json
+{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
+```
 
 ### GET · POST /photos/
 
-- **GET** → **200** `{"photos": [{"id", "recorded_on", "front_url", "back_url", "side_url", "source", "created_at"}]}`.
-- **POST** multipart: at least one of `front` / `back` / `side`, optional `recorded_on`. Stored with
-  `source=client`. **201** `{"photo": {...}}` with absolute URLs, **400** without images.
+- **GET** → **200** `{"photos": [{"id", "recorded_on", "front_url", "back_url", "side_url", "source", "created_at"}]}`;
+  `?recorded_on=YYYY-MM-DD` returns only that day.
+- **POST** multipart upsert of `recorded_on` (same rules): at least one of `front` / `back` /
+  `side`; the slots sent replace the day's, the others stay. **201** `{"photo": {...}, "created": true}`
+  or **200** `{"photo": {...}, "created": false}` with absolute URLs, **400** without images.
+  Photos are stored as WebP (max 1280 px wide); a replaced slot deletes its previous file, so
+  always use the URLs of the latest response.
 
 Rows the advisor deletes in the web pane are only hidden there; both lists keep returning them.
 
@@ -375,10 +432,11 @@ initialised. Call after login and on OS token rotation.
 
 | `event` | When |
 |-------|------|
-| `client_weigh_reminder` | Celery beat daily; program day ∈ {6, 13, 20, 27} ("weigh tomorrow") |
-| `client_program_ending` | Celery beat daily; `days_remaining == 4` |
+| `client_weigh_reminder` | 08:00 client time; program day ∈ {6, 13, 20, 27} ("weigh tomorrow") |
+| `client_program_ending` | 08:00 client time; `days_remaining == 4` |
 
-Beat task: `client_api.tasks.send_client_reminders` (08:00). The advisor side of
+Beat task: `client_api.tasks.send_client_reminders`, hourly; each run pushes to the clients whose
+local time (`X-Timezone`) is 08:00, with their program day of that date. The advisor side of
 `POST /measurements/` uses web push (`client_new_measurement`), not FCM.
 
 ---

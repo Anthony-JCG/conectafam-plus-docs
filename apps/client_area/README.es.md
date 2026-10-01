@@ -26,8 +26,8 @@ Relación con las apps núcleo:
 
 | Modelo | Relaciones y campos |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único y `access_status` (`none` / `pending` / `active` / `deactivated`). |
-| `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`. La fecha de fin se calcula (`start_date + duration_days`) y no se guarda. |
+| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único, `access_status` (`none` / `pending` / `active` / `deactivated`) y `time_zone` (zona IANA del dispositivo, ver [Fechas locales](#fechas-locales)). |
+| `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`, `unlocked_through_day` (día del programa alcanzado en periodos anteriores). La fecha de fin se calcula (`start_date + duration_days`) y no se guarda. Se reutiliza en cada renovación. |
 | `ClientProgramEntry` | Fila de la tabla Programa: FK → asignación (`program_entries`); `assigned_on` (por defecto `timezone.localdate`). Ordenadas de más nueva a más antigua (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | Una celda: FK → fila (`files`); hueco `nutrition` / `sport` / `other`, único por fila; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
 | `ClientProduct` | FK → asignación; `recorded_on`, `products`, `observations`. Solo texto, sin elemento de board. |
@@ -35,8 +35,8 @@ Relación con las apps núcleo:
 | `ClientLesson` | FK → `TrainingProgram` (`lessons`); un elemento de academia: `board_item` (el contenido: vídeo subido, YouTube o cualquier elemento elegido), `text`, `attachment_item` (elemento PDF / imagen del board), `unlock_day`, `order`; FK opcional → `AcademyPlanItem` (`source_item`). |
 | `AcademyPlan` | FK → `users.User` (asesor). Plantilla de un programa formativo: su nombre y sus `AcademyPlanItem`. |
 | `AcademyPlanItem` | FK → `AcademyPlan`; `board_item`, `text`, `attachment_item`, `unlock_day`, `order`, igual que `ClientLesson`. |
-| `ClientMeasurement` | FK → perfil; medidas y `bioimpedance`; `source=client\|advisor`; `hidden_by_advisor`. |
-| `ClientProgressPhoto` | FK → perfil; frente, espalda y lado; `source`; `hidden_by_advisor`. |
+| `ClientMeasurement` | FK → perfil; medidas y `bioimpedance`; `source=client\|advisor` (quién la creó); `hidden_by_advisor`. Una fila por cliente y fecha (`client_measurement_profile_day`). |
+| `ClientProgressPhoto` | FK → perfil; frente, espalda y lado; `source`; `hidden_by_advisor`. Una fila por cliente y fecha (`client_photo_profile_day`). `save()` pasa cada hueco por `core.utils.files.process_image_field_if_changed`, como los demás modelos con imágenes: WebP (calidad 80, máx. 1280 px) y, al sustituir un hueco, se borra su archivo anterior (celda web y API). |
 | `ClientAccessRequest` | FK → perfil; `kind` primer acceso o continuidad; `order_number` / `purchase_date` opcionales. |
 
 Todo salvo `AcademyPlan` / `AcademyPlanItem` cuelga de `ClientProfile` con `CASCADE`: al borrar el
@@ -50,39 +50,82 @@ elemento vacía la celda.
 | Estado | Condición | Acceso del cliente |
 |---|---|---|
 | Borrador | `start_date` es `null` | No cambia |
+| Programado | `hoy < start_date` y `deactivated_at` vacío | `active` (se concede al activar; la app muestra "Tu programa inicia …") |
 | Activo | `start_date <= hoy <= start_date + duration_days` y `deactivated_at` vacío | `active` (se concede al activar) |
-| Terminado | `deactivated_at` relleno (asesor, expiración diaria o fin del add-on) | `none` ("Sin acceso") |
+| Terminado | `deactivated_at` relleno (asesor, expiración horaria o fin del add-on) | `none` ("Sin acceso") |
+
+Un programa programado o activo está **en curso** (`assignment_is_running`, `assignment.is_running`).
 
 - **Activar** (`activate_program`) guarda la fecha de inicio y la duración, acepta las solicitudes
   de acceso pendientes (`access_actions.grant_access_for_program`) o, si no hay, activa el perfil, y
   deja una nota en `ActivityContact`.
-- **Fechas bloqueadas.** En cuanto el programa tiene fecha de inicio, ni esa fecha ni
+- **Fechas bloqueadas.** Mientras el programa está en curso, ni la fecha de inicio ni
   `duration_days` cambian: `ProgramPeriodForm(assignment=...)` pinta los dos campos desactivados (se
-  ignora lo que llegue en el POST) y `activate_program` lanza `ValueError` si el programa ya está
-  activo. Solo **Desactivar** lo termina.
-- **Desactivar / expirar.** `deactivate_program` y la tarea diaria `expire_due_programs` rellenan
+  ignora lo que llegue en el POST) y `activate_program` lanza `ValueError`. Solo **Desactivar** (o
+  que llegue su fin) lo para.
+- **Desactivar / expirar.** `deactivate_program` y la tarea horaria `expire_due_programs` (cuando
+  el último día ya terminó en la zona del cliente) rellenan
   `deactivated_at` y llaman a `clear_access_on_program_end` (`access_status=none`); el siguiente
   login en Fam Fit crea una nueva solicitud `first_access`.
-- Las herramientas siempre editan la **asignación de trabajo** (`get_or_create_working_assignment`):
-  la última sin desactivar o, si no hay, un borrador nuevo. Una asignación terminada conserva su
-  contenido, pero el siguiente programa arranca desde un borrador nuevo.
+- **La renovación conserva los datos.** Las herramientas siempre editan la **asignación de trabajo**
+  (`get_or_create_working_assignment`): la última del cliente, haya terminado o no; solo un cliente
+  sin ninguna recibe un borrador nuevo. Volver a activar un programa terminado (desde Progreso o
+  Aceptar) pone el nuevo periodo en la misma asignación, así que la tabla Programa, los productos y
+  la academia se mantienen hasta que el asesor los cambie, y la app sigue mostrando los últimos
+  archivos. Al expirar o desactivar no se borra nada.
+- **Las lecciones desbloqueadas se mantienen.** Una renovación reinicia el día del programa, pero
+  antes `activate_program` guarda en `unlocked_through_day` el día alcanzado en el periodo que
+  termina (`reached_program_day`). `lesson_is_unlocked` abre una lección si
+  `unlock_day <= unlocked_through_day` o si el día actual ya llegó, así que lo ya desbloqueado sigue
+  abierto y el resto sigue la nueva cuenta. Vive en la asignación del cliente: las plantillas
+  (`AcademyPlan`) y el contenido del board no se tocan.
 - **Aceptar una solicitud** (`start_program_for_request`). **Aceptar** (panel) y **Admitir** (home)
   abren el mismo formulario (`client-area-accept-request-form.html`) en un collapse de Bootstrap
-  debajo de la solicitud, con la fecha de inicio y la duración. Por defecto: hoy
-  (`timezone.localdate()`) y `proposed_duration_days`, es decir, la duración del programa activo; si
-  no hay, la del último programa iniciado; y si tampoco, la del borrador (90 por defecto en el
-  modelo). Al confirmar se activa la asignación de trabajo (un borrador nuevo si el cliente vuelve
-  a suscribirse) con `activate_program`, que además acepta la solicitud. Si el programa ya está
-  activo, sus fechas siguen bloqueadas y solo se acepta la solicitud (sin 422).
+  debajo de la solicitud, con la fecha de inicio y la duración. Por defecto: el hoy del cliente
+  (`local_today()`) y `proposed_duration_days`, es decir, la duración del propio programa
+  (también si ya terminó); si no tiene, la del último programa iniciado; y si tampoco, la del modelo
+  (90). Al confirmar se activa la asignación de trabajo (la misma en una renovación) con
+  `activate_program`, que además acepta la solicitud. Si el programa está en curso (activo o
+  programado), sus fechas siguen bloqueadas y solo se acepta la solicitud (sin 422).
 
 ### Fechas locales
 
-Todas las fechas por defecto del área de cliente (medidas, fotos, productos, filas del programa,
-la fecha de inicio propuesta) y todos los cálculos de fechas (día del programa, progreso, días
-restantes, expiración, recordatorios) usan `timezone.localdate()`, nunca `date.today()`. Con
-`USE_TZ = True` es la fecha en la zona horaria activa: `users.middle.TimezoneFromSessionMiddleware`
-activa la zona del navegador guardada en la sesión (`session["django_timezone"]`, que envía
-`core.views`); en las tareas de Celery y en peticiones sin ella se usa `TIME_ZONE` (`Europe/Madrid`).
+El servidor (`TIME_ZONE`, `Europe/Madrid`, también el de Celery), el asesor (zona del navegador que
+activa en cada petición `users.middle.TimezoneFromSessionMiddleware`) y el cliente pueden estar en
+zonas distintas. Nunca `date.today()`:
+
+- **El calendario del cliente** es `ClientProfile.local_today()`, en `ClientProfile.time_zone` (lo
+  manda Fam Fit en `X-Timezone` y lo guarda `client_api.auth.remember_client_timezone`; vacío usa
+  `TIME_ZONE`). De él salen el día del programa, los días restantes, el progreso, si está
+  programado / activo / terminado (`services.programs`, `on` por defecto), las lecciones
+  desbloqueadas, el día de los registros (Añadir, el valor por defecto de la API y su "como mucho
+  mañana"), la fecha de inicio propuesta, la expiración horaria y los avisos de las 08:00. Así el
+  asesor y la app ven el mismo día.
+- **La fecha del asesor** (`timezone.localdate()`) se queda para lo que fecha el asesor: productos,
+  filas de Programa, notas y el filtro de la lista de contactos por estado del programa (una sola
+  fecha en el SQL de la lista).
+
+### Tablas Evolución / Fotos
+
+- **Una fila por cliente y fecha** (el registro entero, no un valor suelto), compartida por el
+  asesor y la app Fam Fit. La migración `0015` fusionó los duplicados que había (ver
+  [Migraciones](#migraciones)).
+- **Añadir** (`add_record_row`) crea una fila vacía con la fecha de hoy del cliente (`local_today()`). Si
+  hoy ya tiene una fila visible responde con un toast 422 ("Ya existe un registro para esa fecha");
+  una fila de hoy **oculta por el asesor** sigue ocupando la fecha, así que Añadir la vuelve a
+  mostrar con sus valores.
+- Cada fila es el formulario de su registro (`services.pane.build_record_forms`,
+  `ClientMeasurementForm` / `ClientProgressPhotoForm` con `RecordCellFormMixin`): cada celda
+  (`client-area-record-cell.html`) es un formulario pequeño que se envía en `change`, guarda solo su
+  campo y se reemplaza (`outerHTML`); un valor no válido vuelve con el error en la celda y un
+  **200**. Una fecha que ya usa otra fila (también las ocultas) muestra "Ya existe un registro para
+  esa fecha" y no se guarda; una fecha nueva válida devuelve la tabla entera (las filas se
+  reordenan).
+- Cada hueco de foto muestra su miniatura o un "+"; al pulsar cualquiera de los dos se sube (o se
+  cambia) la foto.
+- El botón de añadir y el de borrar fila reutilizan `cotton/grid_add_button` y
+  `cotton/grid_row_delete`, los mismos de la tabla Programa. Borrar una fila solo marca
+  `hidden_by_advisor`.
 
 ### Tabla Programa
 
@@ -141,12 +184,12 @@ cada elemento.
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
 | `services/profiles.py` | `get_or_create_client_profile` |
 | `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, `start_program_for_request`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
-| `services/content.py` | Medidas, fotos, `add_program_entry` / `set_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
+| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
 | `services/pane.py` | Contexto del panel, `build_catalog_context`, URLs de WhatsApp |
 | `services/inbox.py` | `pending_access_requests_for_advisor` (de la más reciente a la más antigua, con contacto, URL de WhatsApp y antigüedad) para el bloque del home; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
-| `services/expiry.py` | Expiración diaria y `pause_programs_without_entitlement` |
+| `services/expiry.py` | Expiración horaria y `pause_programs_without_entitlement` |
 
 ## Board del catálogo
 
@@ -230,8 +273,9 @@ Prefijo de URL: **`/client-area/`**
 | `load-pane/` | `load_client_area_pane` | Parcial de herramientas (`client-area-tools.html`) |
 | `forms/<kind>/` | `client_area_tool_form` | Parcial del formulario para el modal compartido (`views.TOOL_FORMS`) |
 | `access/activate/` · `deactivate/` | `client_area_activate_access`, `client_area_deactivate_access` | Parcial de herramientas |
-| `measurements/add/` · `photos/add/` | `client_area_add_measurement`, `client_area_add_photo` | Parcial de la tabla, o el formulario con errores |
-| `measurements/hide/` · `photos/hide/` | `client_area_hide_measurement`, `client_area_hide_photo` | Parcial de la tabla |
+| `records/<kind>/add/` (`kind` = `measurement` \| `photo`) | `client_area_add_record` | Parcial de la tabla; toast 422 si hoy ya tiene fila |
+| `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | La celda (errores en la celda, 200), o la tabla tras cambiar la fecha |
+| `records/<kind>/<id>/hide/` | `client_area_hide_record` | Parcial de la tabla |
 | `program/entries/add/` | `client_area_add_program_entry` | Parcial de la tabla del programa (fila nueva) |
 | `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` o `board_item`): parcial de la tabla del programa; toast 422 si no es válido, 404 si el hueco no existe |
 | `program/files/<id>/delete/` · `program/entries/<id>/delete/` | `client_area_delete_program_file`, `client_area_delete_program_entry` | Parcial de la tabla del programa |
@@ -255,7 +299,7 @@ Prefijo de URL: **`/client-area/`**
 
 ### Modal de formulario compartido
 
-- Las filas de evolución, fotos, productos y academia se añaden con un botón
+- Las filas de productos y academia se añaden con un botón
   **Añadir** que abre `#clientAreaFormModal` (`components/modals/client-area-modals.html`, incluido
   en `contacts.html` fuera de `#contactModal`, junto al selector del catálogo).
 - `data-ca-open-form` lo abre con `Modal.show()` y no con `data-bs-toggle`, para que
@@ -264,9 +308,8 @@ Prefijo de URL: **`/client-area/`**
 - Si se guarda bien, la vista solo reemplaza el parcial de la tabla y envía `showToast` +
   `clientAreaFormSaved` (cierra el modal). Con errores, el formulario se vuelve a pintar dentro del
   modal con un **200** (`HX-Retarget`).
-- Los modales de alta son de una columna (`ToolForm.field_class = "col-12"`); solo Evolución
-  (medidas) mantiene dos (`col-12 col-sm-6`). `cotton/tool_add_button` acepta un `url` opcional
-  para formularios de un objeto anidado (los elementos de academia de un programa).
+- Los modales de alta son de una columna. `cotton/tool_add_button` acepta un `url` opcional para
+  formularios de un objeto anidado (los elementos de academia de un programa).
 - **Secciones del formulario.** Los campos llevan los attrs de sección del repo (`data_section` /
   `data_section_label`, como en `components/form-model.html`). `client-area-tool-form.html` pinta
   el título de la sección cuando cambia, y `cotton/form_field` oculta la etiqueta del campo dentro de
@@ -277,8 +320,8 @@ Prefijo de URL: **`/client-area/`**
 - **Acceso** — código de acceso con copiar, aceptar solicitud (fecha de inicio y duración, ver
   arriba), activar/desactivar el acceso, enlace
   de WhatsApp y badges de App Store / Play Store (provisionales).
-- **Evolución / Fotos** — con scroll horizontal. Borrar una fila (la haya creado el cliente o el
-  asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Fam Fit la sigue
+- **Evolución / Fotos** — con scroll horizontal y edición en la propia tabla (ver *Tablas Evolución
+  / Fotos*). Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Fam Fit la sigue
   devolviendo.
 - **Productos nutricionales** — `ClientProductForm` (fecha, productos, observaciones; sin selector
   del catálogo). Al pulsar una fila se abre el mismo modal ya relleno (`data-ca-open-form` +
@@ -355,6 +398,8 @@ del contacto, qué pide (acceso, o continuar el programa con el número de pedid
 | `0012_clientprogramentry` | Crea `ClientProgramEntry`; añade `ClientProgramFile.entry` (nullable) |
 | `0013_program_files_to_entries` | Datos (modelos históricos): borra los archivos sin elemento del board; agrupa el resto en una fila por (asignación, fecha), y una columna repetida abre otra fila |
 | `0014_program_file_cell` | Elimina `ClientProgramFile.assignment` / `assigned_on`; `entry` y `board_item` (`CASCADE`) pasan a ser obligatorios; único (`entry`, `slot`) |
+| `0015_records_by_date_and_renewals` | Añade `ClientProgramAssignment.unlocked_through_day`. Datos (modelos históricos): fusiona las medidas / fotos duplicadas de un cliente y fecha en la fila más reciente, con el último valor no vacío de cada campo / hueco (queda oculta solo si lo estaban todas); en clientes con varios programas, el último toma las filas de la tabla Programa, los productos y la academia que le falten del programa anterior más reciente que los tenga, y `unlocked_through_day` de los periodos anteriores. Después, único (`client_profile`, `recorded_on`) en los dos modelos. Los archivos de fotos de los duplicados borrados que la fila fusionada no conserva se borran del storage |
+| `0016_clientprofile_time_zone` | Añade `ClientProfile.time_zone` |
 
 Los `AcademyPlanItem` guardados desde asignaciones en modo "all" conservan el día que tenían. El
 contenido propio de las lecciones en los campos que borra `0011` (URL de vídeo, vídeo, adjunto) no se
@@ -368,7 +413,7 @@ migración `0003` de `pricing`). Los archivos van por el backend de almacenamien
 
 | Servicio | Uso |
 |---|---|
-| Celery beat | `client_area.tasks.expire_client_programs_task` cada día a las 05:15 |
+| Celery beat | `client_area.tasks.expire_client_programs_task` cada hora a los :15 (el día de cada cliente termina a su medianoche) |
 | Celery | `client_area.tasks.pause_lapsed_client_programs_task` (fin del add-on) |
 | Redis | La búsqueda del catálogo reutiliza el índice de búsqueda de boards |
 

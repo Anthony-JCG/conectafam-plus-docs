@@ -66,7 +66,11 @@ datos; la única caché es el rate limit del login.
 | `POST /continuity/` | `none` → `pending` + `ClientAccessRequest(continuity)` |
 | El asesor acepta la solicitud, activa el acceso o activa el programa (se aceptan las solicitudes pendientes) | `active` |
 | El asesor desactiva el acceso | `deactivated` |
-| Termina el programa: lo desactiva el asesor, lo cierra la expiración diaria o al asesor se le acaba el add-on del área de clientes | `none` ("Sin acceso"); el siguiente login crea una solicitud nueva |
+| Termina el programa: lo desactiva el asesor, lo cierra la expiración horaria tras su último día en la zona del cliente o al asesor se le acaba el add-on del área de clientes | `none` ("Sin acceso"); el siguiente login crea una solicitud nueva |
+
+Una renovación vuelve a poner en marcha el mismo programa con un periodo nuevo: los archivos de
+`/program/`, los productos y `/academy/` (con las lecciones ya desbloqueadas) se mantienen; al
+terminar un programa no se borra nada.
 
 Los tokens de dispositivo no se revocan cuando cambia el acceso: las llamadas autenticadas siguen
 dando **200** en los endpoints que solo piden token y **403**
@@ -80,6 +84,20 @@ Authorization: Token <token>
 
 Sin cabecera → **401** `{"error": "Authentication required."}`; token desconocido → **401**
 `{"error": "Invalid or expired token."}`.
+
+### Zona horaria del cliente
+
+Manda la zona IANA del dispositivo en el login y en cada petición autenticada:
+
+```
+X-Timezone: America/Guayaquil
+```
+
+El servidor la guarda en el perfil cuando cambia (los nombres desconocidos se ignoran, nunca dan
+error). El calendario del cliente la sigue en todas partes, lo mire quien lo mire (app, web del
+asesor, tareas de Celery): `day` / `days_remaining` / `status` programado, lecciones desbloqueadas,
+el valor por defecto y el máximo de `recorded_on`, el fin del programa y los avisos de las 08:00.
+Sin ella se usa la zona del servidor (`settings.TIME_ZONE`).
 
 ### Refresh / logout
 
@@ -101,9 +119,9 @@ Sin cabecera → **401** `{"error": "Authentication required."}`; token desconoc
 | GET | `/me/` | token | Perfil básico + resumen del programa |
 | GET | `/home/` | token + activo | Saludo, métricas actuales, deltas semanales, WhatsApp del asesor |
 | GET | `/measurements/` | token | Historial de medidas (gráficas) |
-| POST | `/measurements/` | token + activo | Alta de medida (`source=client`) |
+| POST | `/measurements/` | token + activo | Guarda la medida del día (upsert por fecha) |
 | GET | `/photos/` | token | Historial de fotos de evolución |
-| POST | `/photos/` | token + activo | Multipart frente/espalda/lado (`source=client`) |
+| POST | `/photos/` | token + activo | Guarda las fotos del día, multipart frente/espalda/lado (upsert por fecha) |
 | GET | `/program/` | token + activo | Último archivo de cada hueco (nutrition/sport/other) + productos |
 | GET | `/products/` | token | Productos del programa activo |
 | GET | `/products/<id>/` | token | Detalle de producto (popup) |
@@ -120,10 +138,13 @@ Cualquier error inesperado devuelve **500** `{"error": "Internal server error."}
 ### Program
 
 `program` en `/me/`, `/home/` y `/program/` describe la asignación activa, o es `null` si no hay
-ninguna.
+ninguna. `/me/` y `/home/` también devuelven un programa **programado** para empezar más adelante
+(un primer programa o una renovación), para que la app muestre "Tu programa inicia {start_date}";
+`/program/` y `/academy/` esperan a la fecha de inicio.
 
 ```json
 {
+  "status": "active",
   "day": 10,
   "start_date": "2026-09-02",
   "duration_days": 90,
@@ -136,13 +157,24 @@ ninguna.
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `day` | int | Día del programa empezando en 1 (`1` antes de la fecha de inicio) |
+| `status` | string | `active`, o `scheduled` (empieza el `start_date`) |
+| `day` | int \| null | Día del programa empezando en 1; `null` mientras está programado. Una renovación lo reinicia en 1 |
 | `start_date` | `YYYY-MM-DD` | La fija el asesor; no cambia una vez activado el programa |
 | `duration_days` | int | La fija el asesor; no cambia una vez activado el programa |
 | `end_date` | `YYYY-MM-DD` | Siempre `start_date + duration_days` (se calcula, no se guarda) |
 | `progress_percent` | int | De 0 a 100 |
-| `days_remaining` | int | Días hasta `end_date` |
-| `is_active` | bool | Dentro de la ventana del programa y sin desactivar |
+| `days_remaining` | int \| null | Días hasta `end_date`; `null` mientras está programado |
+| `is_active` | bool | Dentro de la ventana del programa y sin desactivar (`false` mientras está programado) |
+
+Programa programado en `/me/`:
+
+```json
+{
+  "access_status": "active",
+  "program": { "status": "scheduled", "day": null, "start_date": "2026-10-06", "duration_days": 90, "end_date": "2027-01-04", "progress_percent": 0, "days_remaining": null, "is_active": false },
+  "program_finished": false
+}
+```
 
 ### Product
 
@@ -169,7 +201,7 @@ panel aparece en la siguiente petición.
 | `title` | string | Título del elemento de board; si no, los 80 primeros caracteres del texto; si no, el título del adjunto; si no, `Lesson <id>` |
 | `unlock_day` | int | `0` = siempre disponible ("Siempre"); `N >= 1` = disponible desde el día `N` del programa ("Día N") |
 | `order` | int | Orden dentro de su programa; ordenad por él |
-| `unlocked` | bool | `unlock_day == 0`, o `program_day >= unlock_day` |
+| `unlocked` | bool | `unlock_day == 0`, `program_day >= unlock_day`, o un día ya alcanzado en un periodo anterior (una renovación reinicia `program_day` pero mantiene lo desbloqueado) |
 | `thumbnail_url` | string \| null | Vista previa absoluta del elemento de contenido, la imagen que muestra el board: miniatura `hqdefault` de YouTube, `mosaic_preview` de PDFs / imágenes / páginas. `null` si el board no tiene (vídeos subidos, texto, PDFs cuya vista previa no se pudo generar). También llega en lecciones bloqueadas |
 | `video_url` | string | URL de YouTube (`""` si no lo es o si está bloqueada) |
 | `youtube_video_id` | string \| null | Id de 11 caracteres sacado de `video_url`, para un reproductor de YouTube embebido |
@@ -201,12 +233,13 @@ contenido rellena la clave de su tipo si sigue vacía:
   "name": "Maria Castillo",
   "access_status": "active",
   "access_code": "ABCD2345",
-  "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
+  "program": { "status": "active", "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "program_finished": false
 }
 ```
 
-`program_finished` es `true` cuando el acceso está `active` pero no hay programa activo. Cuando un
+`program_finished` es `true` cuando el acceso está `active` pero no hay programa en curso (ni activo
+ni programado). Cuando un
 programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_status: "none"`,
 `program: null` y `program_finished: false`; la app ofrece `POST /continuity/`.
 
@@ -216,7 +249,7 @@ programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_
 {
   "greeting_name": "Maria Castillo",
   "access_status": "active",
-  "program": { "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
+  "program": { "status": "active", "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "current": {
     "id": 12,
     "recorded_on": "2026-09-25",
@@ -241,16 +274,43 @@ ocultan en el cliente y el servidor no aplica fórmulas de báscula.
 
 ### GET · POST /measurements/
 
+**Un registro por día.** Un cliente tiene como mucho una medida y un registro de fotos por fecha.
+La app guarda con la **fecha local del dispositivo** en `recorded_on` (si no llega, el hoy en la
+zona del cliente, ver `X-Timezone`) y antes precarga el registro de ese día: guardar
+otra vez el mismo día lo actualiza en lugar de añadir una fila.
+
 - **GET** → **200** `{"measurements": [Measurement, ...]}`, de la más reciente a la más antigua.
-- **POST** JSON: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`, `bioimpedance` opcional y
-  `recorded_on` opcional (por defecto, hoy). Se guarda con `source=client`; el asesor recibe una
-  nota en `ActivityContact` y un web push. **201** `{"measurement": {...}}`, **400** si no valida.
+  `?recorded_on=YYYY-MM-DD` devuelve solo ese día (`[]` o una fila) para precargar el formulario.
+- **POST** JSON, upsert del `recorded_on`: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`,
+  `bioimpedance`. Solo cambian las claves enviadas; `null` borra un valor; `bioimpedance` se
+  reemplaza entero. `recorded_on` puede ser como mucho el mañana del cliente (margen por si la zona
+  guardada está desfasada).
+  - **201** `{"measurement": {...}, "created": true}` la primera vez del día (`source=client`; el
+    asesor recibe una nota en `ActivityContact` y un web push).
+  - **200** `{"measurement": {...}, "created": false}` si el día ya tenía registro (sin nueva
+    notificación; `source` sigue diciendo quién lo creó).
+  - **400** JSON no válido, `recorded_on` mal formado o futuro, o un valor no numérico.
+
+Segundo guardado del día (`chest` ya estaba guardado y se mantiene):
+
+```json
+{ "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80 }
+```
+
+```json
+{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
+```
 
 ### GET · POST /photos/
 
-- **GET** → **200** `{"photos": [{"id", "recorded_on", "front_url", "back_url", "side_url", "source", "created_at"}]}`.
-- **POST** multipart: al menos una de `front` / `back` / `side` y `recorded_on` opcional. Se guarda
-  con `source=client`. **201** `{"photo": {...}}` con URLs absolutas, **400** si no llega ninguna imagen.
+- **GET** → **200** `{"photos": [{"id", "recorded_on", "front_url", "back_url", "side_url", "source", "created_at"}]}`;
+  `?recorded_on=YYYY-MM-DD` devuelve solo ese día.
+- **POST** multipart, upsert del `recorded_on` (mismas reglas): al menos una de `front` / `back` /
+  `side`; las que llegan sustituyen a las del día y el resto se mantiene. **201**
+  `{"photo": {...}, "created": true}` o **200** `{"photo": {...}, "created": false}` con URLs
+  absolutas, **400** si no llega ninguna imagen. Las fotos se guardan en WebP (máx. 1280 px de
+  ancho); al sustituir un hueco se borra su archivo anterior, así que usa siempre las URLs de la
+  última respuesta.
 
 Las filas que el asesor borra en el panel web solo se ocultan allí; las dos listas las siguen
 devolviendo.
@@ -378,10 +438,11 @@ Llamarlo tras el login y cada vez que el sistema rote el token.
 
 | `event` | Cuándo |
 |-------|--------|
-| `client_weigh_reminder` | Beat diario; día del programa ∈ {6, 13, 20, 27} ("pésate mañana") |
-| `client_program_ending` | Beat diario; `days_remaining == 4` |
+| `client_weigh_reminder` | 08:00 hora del cliente; día del programa ∈ {6, 13, 20, 27} ("pésate mañana") |
+| `client_program_ending` | 08:00 hora del cliente; `days_remaining == 4` |
 
-Tarea beat: `client_api.tasks.send_client_reminders` (08:00). Del lado del asesor,
+Tarea beat: `client_api.tasks.send_client_reminders`, cada hora; cada pasada avisa a los clientes
+cuya hora local (`X-Timezone`) son las 08:00, con su día del programa de esa fecha. Del lado del asesor,
 `POST /measurements/` usa web push (`client_new_measurement`), no FCM.
 
 ---
