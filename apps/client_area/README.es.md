@@ -66,6 +66,14 @@ elemento vacía la celda.
 - Las herramientas siempre editan la **asignación de trabajo** (`get_or_create_working_assignment`):
   la última sin desactivar o, si no hay, un borrador nuevo. Una asignación terminada conserva su
   contenido, pero el siguiente programa arranca desde un borrador nuevo.
+- **Aceptar una solicitud** (`start_program_for_request`). **Aceptar** (panel) y **Admitir** (home)
+  abren el mismo formulario (`client-area-accept-request-form.html`) en un collapse de Bootstrap
+  debajo de la solicitud, con la fecha de inicio y la duración. Por defecto: hoy
+  (`timezone.localdate()`) y `proposed_duration_days`, es decir, la duración del programa activo; si
+  no hay, la del último programa iniciado; y si tampoco, la del borrador (90 por defecto en el
+  modelo). Al confirmar se activa la asignación de trabajo (un borrador nuevo si el cliente vuelve
+  a suscribirse) con `activate_program`, que además acepta la solicitud. Si el programa ya está
+  activo, sus fechas siguen bloqueadas y solo se acepta la solicitud (sin 422).
 
 ### Fechas locales
 
@@ -132,7 +140,7 @@ cada elemento.
 | `services/access_actions.py` | Aceptar solicitudes, activar/desactivar el acceso, darlo al iniciar el programa, quitarlo al terminar, textos de WhatsApp de continuidad |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
 | `services/profiles.py` | `get_or_create_client_profile` |
-| `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
+| `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, `start_program_for_request`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
 | `services/content.py` | Medidas, fotos, `add_program_entry` / `set_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
@@ -221,7 +229,7 @@ Prefijo de URL: **`/client-area/`**
 |---|---|---|
 | `load-pane/` | `load_client_area_pane` | Parcial de herramientas (`client-area-tools.html`) |
 | `forms/<kind>/` | `client_area_tool_form` | Parcial del formulario para el modal compartido (`views.TOOL_FORMS`) |
-| `access/accept/` · `activate/` · `deactivate/` | `client_area_accept_access`, `client_area_activate_access`, `client_area_deactivate_access` | Parcial de herramientas |
+| `access/activate/` · `deactivate/` | `client_area_activate_access`, `client_area_deactivate_access` | Parcial de herramientas |
 | `measurements/add/` · `photos/add/` | `client_area_add_measurement`, `client_area_add_photo` | Parcial de la tabla, o el formulario con errores |
 | `measurements/hide/` · `photos/hide/` | `client_area_hide_measurement`, `client_area_hide_photo` | Parcial de la tabla |
 | `program/entries/add/` | `client_area_add_program_entry` | Parcial de la tabla del programa (fila nueva) |
@@ -242,7 +250,7 @@ Prefijo de URL: **`/client-area/`**
 | `academy/plans/reuse/` · `copy/` | `client_area_reuse_academy_plan`, `client_area_copy_academy` | Sección de academia (el programa nuevo abierto / carpetas) |
 | `program/activate/` · `program/deactivate/` | `client_area_activate_program`, `client_area_deactivate_program` | Parcial de herramientas; si el periodo no es válido se vuelve a pintar `#caProgressSection` |
 | `access-requests/` | `client_area_access_requests` | Parcial con la lista completa para el modal "Ver todas" del home |
-| `access-requests/accept/` | `client_area_accept_access_home` | Bloque del home (swap principal) + lista del modal (OOB); `showToast` |
+| `access-requests/<id>/accept/` | `client_area_accept_access` | GET: formulario de aceptar (`?scope=pane\|home\|modal`). POST: parcial de herramientas (panel) o bloque del home + lista del modal (OOB); `showToast`. Periodo no válido: se vuelve a pintar el formulario con 200 |
 | `catalog/search/` | `client_area_catalog_search` | Resultados de búsqueda en JSON |
 
 ### Modal de formulario compartido
@@ -266,7 +274,8 @@ Prefijo de URL: **`/client-area/`**
 
 ### Secciones del panel
 
-- **Acceso** — código de acceso con copiar, aceptar solicitud, activar/desactivar el acceso, enlace
+- **Acceso** — código de acceso con copiar, aceptar solicitud (fecha de inicio y duración, ver
+  arriba), activar/desactivar el acceso, enlace
   de WhatsApp y badges de App Store / Play Store (provisionales).
 - **Evolución / Fotos** — con scroll horizontal. Borrar una fila (la haya creado el cliente o el
   asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Fam Fit la sigue
@@ -325,9 +334,10 @@ del contacto, qué pide (acceso, o continuar el programa con el número de pedid
 - **Ver todas** abre `#accessRequestsModal` (`components/modals/modal-access-requests.html`,
   extiende `base-modal.html`). Su cuerpo carga `client_area_access_requests` por HTMX cada vez que
   salta `show.bs.modal`, así que la lista siempre está al día; ya no hay una página aparte.
-- **Admitir**, desde el bloque o desde el modal, hace POST a `client_area_accept_access_home`, que
-  acepta la solicitud (`accept_access_request`) y devuelve el bloque (se reemplaza con `outerHTML`)
-  junto con la lista del modal en `hx-swap-oob`, más un `showToast`. Si falla, toast con 422.
+- **Admitir**, desde el bloque o desde el modal, abre el formulario de aceptar debajo de la fila
+  (ver *Aceptar una solicitud*). Al confirmar hace POST a `client_area_accept_access`, que inicia el
+  programa y devuelve el bloque (se reemplaza con `outerHTML`) junto con la lista del modal en
+  `hx-swap-oob`, más un `showToast`. Si la solicitud ya no está pendiente, toast con 422.
 - Las dos vistas exigen `user_has_client_area` y solo ven solicitudes de los contactos del propio
   asesor.
 

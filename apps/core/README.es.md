@@ -73,7 +73,10 @@ pública) no contiene atributos `hx-*`; sus endpoints AJAX responden con `JsonRe
 `core` es, no obstante, el **proveedor** del contrato HTMX de todo el proyecto: `utils/htmx.py`
 aporta el helper de toast `HX-Trigger` y la respuesta de error 422 que consumen `boards`,
 `communication`, `landing` y `main`, y que el cliente lee en el ciclo de vida genérico de
-formularios modales en `static/js/core.js`.
+formularios modales en `static/js/core.js`. Ese ciclo pone en estado ocupado el
+`button[form="<id>"]` del formulario en `htmx:beforeRequest` y lo libera en el `loadend` del XHR,
+así que el botón vuelve a su estado con cualquier resultado (éxito, re-render con 200, 422, fallo
+de red, cancelación o timeout).
 
 | Vista | URL | Respuesta |
 |---|---|---|

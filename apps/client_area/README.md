@@ -64,6 +64,13 @@ the cell.
 - Tools always edit the **working assignment** (`get_or_create_working_assignment`): the latest
   non-deactivated one, or a new draft. An ended assignment keeps its content, but the next program
   starts from a new draft.
+- **Accept a request** (`start_program_for_request`). **Aceptar** (pane) and **Admitir** (home)
+  open the same inline form (`client-area-accept-request-form.html`) in a Bootstrap collapse under
+  the request, with the start date and duration. Defaults: today (`timezone.localdate()`) and
+  `proposed_duration_days`, the active program's duration, else the latest started program's,
+  else the draft's (model default 90). Confirming activates the working assignment (a new draft
+  after a re-subscription) with `activate_program`, which also accepts the request. If the program
+  is already active, its period stays locked and only the request is accepted (no 422).
 
 ### Local dates
 
@@ -126,7 +133,7 @@ mode. Plans and copy-from-client keep each element's `unlock_day`.
 | `services/access_actions.py` | Accept requests, activate/deactivate access, grant on program start, clear on program end, continuity WhatsApp texts |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **or** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
 | `services/profiles.py` | `get_or_create_client_profile` |
-| `services/programs.py` | Working assignment, `activate_program` / `deactivate_program`, end date, program day, progress, contact status and list filter |
+| `services/programs.py` | Working assignment, `activate_program` / `deactivate_program`, `start_program_for_request`, end date, program day, progress, contact status and list filter |
 | `services/content.py` | Measurements, photos, `add_program_entry` / `set_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Advisor's client-area boards and catalog search |
@@ -213,7 +220,7 @@ URL prefix: **`/client-area/`**
 |---|---|---|
 | `load-pane/` | `load_client_area_pane` | Tools partial (`client-area-tools.html`) |
 | `forms/<kind>/` | `client_area_tool_form` | Form partial for the shared modal (`views.TOOL_FORMS`) |
-| `access/accept/` · `activate/` · `deactivate/` | `client_area_accept_access`, `client_area_activate_access`, `client_area_deactivate_access` | Tools partial |
+| `access/activate/` · `deactivate/` | `client_area_activate_access`, `client_area_deactivate_access` | Tools partial |
 | `measurements/add/` · `photos/add/` | `client_area_add_measurement`, `client_area_add_photo` | Table partial, or the form with errors |
 | `measurements/hide/` · `photos/hide/` | `client_area_hide_measurement`, `client_area_hide_photo` | Table partial |
 | `program/entries/add/` | `client_area_add_program_entry` | Program table partial (new row) |
@@ -234,7 +241,7 @@ URL prefix: **`/client-area/`**
 | `academy/plans/reuse/` · `copy/` | `client_area_reuse_academy_plan`, `client_area_copy_academy` | Academy section (the new program open / folders) |
 | `program/activate/` · `program/deactivate/` | `client_area_activate_program`, `client_area_deactivate_program` | Tools partial; invalid period re-renders `#caProgressSection` |
 | `access-requests/` | `client_area_access_requests` | Full pending list partial for the home "Ver todas" modal |
-| `access-requests/accept/` | `client_area_accept_access_home` | Home block (main swap) + modal list (OOB); `showToast` |
+| `access-requests/<id>/accept/` | `client_area_accept_access` | GET: accept form (`?scope=pane\|home\|modal`). POST: tools partial (pane) or home block + modal list (OOB); `showToast`. Invalid period: form re-rendered with 200 |
 | `catalog/search/` | `client_area_catalog_search` | JSON search results |
 
 ### Shared form modal
@@ -257,7 +264,8 @@ URL prefix: **`/client-area/`**
 
 ### Pane sections
 
-- **Access** — access code with copy, accept request, activate/deactivate access, WhatsApp link,
+- **Access** — access code with copy, accept request (start date and duration, see above),
+  activate/deactivate access, WhatsApp link,
   App Store / Play Store badges (placeholders).
 - **Evolución / Fotos** — horizontal scroll. Deleting any row (client or advisor source) only sets
   `hidden_by_advisor`: the row leaves the web pane, the Fam Fit API still returns it.
@@ -311,9 +319,10 @@ horas"), a WhatsApp button and **Admitir**.
 - **Ver todas** opens `#accessRequestsModal` (`components/modals/modal-access-requests.html`,
   extends `base-modal.html`). Its body loads `client_area_access_requests` with HTMX on every
   `show.bs.modal`, so the list is always fresh; there is no standalone page.
-- **Admitir**, from the block or the modal, posts to `client_area_accept_access_home`, which accepts
-  the request (`accept_access_request`) and returns the block (swapped `outerHTML`) plus the modal
-  list with `hx-swap-oob`, and a `showToast` trigger. Errors return a 422 toast.
+- **Admitir**, from the block or the modal, opens the accept form under the row (see *Accept a
+  request*). Confirming posts to `client_area_accept_access`, which starts the program and returns
+  the block (swapped `outerHTML`) plus the modal list with `hx-swap-oob`, and a `showToast` trigger.
+  A request that is no longer pending returns a 422 toast.
 - Both views require `user_has_client_area` and only see requests of the advisor's own contacts.
 
 ## Migrations

@@ -71,7 +71,9 @@ landing) contains no `hx-*` attributes; its AJAX endpoints answer with `JsonResp
 `core` is, however, the **provider** of the project-wide HTMX contract: `utils/htmx.py` supplies the
 `HX-Trigger` toast helper and the 422 error response consumed by `boards`, `communication`,
 `landing`, and `main`, and read on the client by the generic modal-form lifecycle in
-`static/js/core.js`.
+`static/js/core.js`. That lifecycle marks the form's `button[form="<id>"]` busy on
+`htmx:beforeRequest` and clears it on the XHR `loadend`, so the button resets on every outcome
+(success, 200 re-render, 422, network error, abort, timeout).
 
 | View | URL | Response |
 |---|---|---|
