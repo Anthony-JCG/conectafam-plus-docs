@@ -116,7 +116,8 @@ Sin ella se usa la zona del servidor (`settings.TIME_ZONE`).
 | POST | `/auth/token/refresh/` | token | Rotar el token |
 | POST | `/auth/logout/` | token | Borrar el token del dispositivo |
 | POST | `/auth/fcm-token/` | token + Firebase | Registrar el token FCM del dispositivo |
-| GET | `/me/` | token | Perfil básico + resumen del programa |
+| GET | `/me/` | token | Perfil básico + resumen del programa + `profile_complete` |
+| GET · PATCH | `/profile/` | token | "Mi perfil": sexo, fecha de nacimiento, altura, cuello, nivel de actividad |
 | GET | `/home/` | token + activo | Saludo, métricas actuales, deltas semanales, WhatsApp del asesor |
 | GET | `/measurements/` | token | Historial de medidas (gráficas) |
 | POST | `/measurements/` | token + activo | Guarda la medida del día (upsert por fecha) |
@@ -234,10 +235,12 @@ contenido rellena la clave de su tipo si sigue vacía:
   "access_status": "active",
   "access_code": "ABCD2345",
   "program": { "status": "active", "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
-  "program_finished": false
+  "program_finished": false,
+  "profile_complete": true
 }
 ```
 
+`profile_complete` es `false` mientras falte algún dato de `/profile/` (la app los pide).
 `program_finished` es `true` cuando el acceso está `active` pero no hay programa en curso (ni activo
 ni programado). Cuando un
 programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_status: "none"`,
@@ -259,7 +262,14 @@ programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_
     "hip": null,
     "arm": null,
     "leg": null,
-    "bioimpedance": { "body_fat_pct": 20.0, "muscle_mass_kg": 31.0 },
+    "body_fat_pct": 20.0,
+    "body_fat_pct_source": "user",
+    "muscle_mass_kg": 31.0,
+    "muscle_mass_pct": 43.1,
+    "muscle_mass_source": "user",
+    "daily_kcal": 2150,
+    "daily_kcal_source": "calc",
+    "bioimpedance": {},
     "source": "client",
     "created_at": "2026-09-25T18:00:00+00:00"
   },
@@ -269,8 +279,50 @@ programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_
 ```
 
 `current` es la última medida (`null` si no hay); `weekly_deltas` compara las dos últimas (`null`
-si hay menos de dos). La app puede mandar un objeto `bioimpedance` opcional; las tarjetas vacías se
-ocultan en el cliente y el servidor no aplica fórmulas de báscula.
+si hay menos de dos). `current` trae la composición corporal de esa fila (ver
+[Composición corporal](#composición-corporal)).
+
+### GET · PATCH /profile/
+
+"Mi perfil", que se pide en el primer arranque (Guardar / Más tarde) y se puede editar después. Solo
+token.
+
+- **GET** → **200** los valores, `missing` (los vacíos, en este orden: `sex`, `birth_date`,
+  `height_cm`, `neck_cm`, `activity_level`), `profile_complete` y `activity_levels` (opciones para
+  pintar, con etiqueta y descripción en español).
+- **PATCH** JSON, cualquier subconjunto; `null` borra un valor → **200** el mismo cuerpo. **400**
+  `{"error": ...}` si un valor está fuera de rango.
+
+| Campo | Valores |
+|---|---|
+| `sex` | `male` / `female` (sexo biológico) |
+| `birth_date` | `YYYY-MM-DD`, edad 10–120; se guarda en el contacto del asesor (`Contact.date_of_birth`) |
+| `height_cm` | 100–250 |
+| `neck_cm` | 20–80 |
+| `activity_level` | 1–5 (multiplicadores 1.2 / 1.375 / 1.55 / 1.725 / 1.9) |
+
+```json
+{ "sex": "female", "birth_date": "1990-05-02", "height_cm": 165, "neck_cm": 33 }
+```
+
+```json
+{
+  "sex": "female",
+  "birth_date": "1990-05-02",
+  "height_cm": 165.0,
+  "neck_cm": 33.0,
+  "activity_level": null,
+  "missing": ["activity_level"],
+  "profile_complete": false,
+  "activity_levels": [
+    { "value": 1, "label": "Sedentario", "description": "Poco o ningún ejercicio.", "multiplier": 1.2 },
+    { "value": 2, "label": "Ligero", "description": "Ejercicio ligero 1–3 días por semana.", "multiplier": 1.375 },
+    { "value": 3, "label": "Moderado", "description": "Ejercicio moderado 3–5 días por semana.", "multiplier": 1.55 },
+    { "value": 4, "label": "Activo", "description": "Ejercicio intenso 6–7 días por semana.", "multiplier": 1.725 },
+    { "value": 5, "label": "Muy activo", "description": "Trabajo físico o entrenamiento dos veces al día.", "multiplier": 1.9 }
+  ]
+}
+```
 
 ### GET · POST /measurements/
 
@@ -282,7 +334,8 @@ otra vez el mismo día lo actualiza en lugar de añadir una fila.
 - **GET** → **200** `{"measurements": [Measurement, ...]}`, de la más reciente a la más antigua.
   `?recorded_on=YYYY-MM-DD` devuelve solo ese día (`[]` o una fila) para precargar el formulario.
 - **POST** JSON, upsert del `recorded_on`: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`,
-  `bioimpedance`. Solo cambian las claves enviadas; `null` borra un valor; `bioimpedance` se
+  los valores opcionales del usuario `body_fat_pct` (2–75) y `muscle_mass_kg` (10–150; sustituye a
+  `bioimpedance.muscle_mass_kg`), y `bioimpedance` (otras lecturas, formato libre). Solo cambian las claves enviadas; `null` borra un valor; `bioimpedance` se
   reemplaza entero. `recorded_on` puede ser como mucho el mañana del cliente (margen por si la zona
   guardada está desfasada).
   - **201** `{"measurement": {...}, "created": true}` la primera vez del día (`source=client`; el
@@ -298,7 +351,26 @@ Segundo guardado del día (`chest` ya estaba guardado y se mantiene):
 ```
 
 ```json
-{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
+{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "body_fat_pct_source": null, "muscle_mass_kg": null, "muscle_mass_pct": null, "muscle_mass_source": null, "daily_kcal": null, "daily_kcal_source": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
+```
+
+#### Composición corporal
+
+Cada fila de medidas (lista, respuesta del POST, `current` de `/home/`) trae `body_fat_pct` +
+`body_fat_pct_source`, `muscle_mass_kg` + `muscle_mass_pct` + `muscle_mass_source` y `daily_kcal` +
+`daily_kcal_source`. El origen es `user` justo cuando el valor está guardado en la fila (lo
+introdujo el cliente, siempre manda), `calc` (calculado) o `null` junto al valor si falta algún dato (nunca se inventa). Se
+calcula con `/profile/` y la fila (`client_area.services.body`):
+
+| Valor | Fórmula | Datos |
+|---|---|---|
+| `body_fat_pct` | U.S. Navy (Hodgdon & Beckett), cm, log10. Hombre `495 / (1.0324 − 0.19077·log10(cintura − cuello) + 0.15456·log10(altura)) − 450`; mujer `495 / (1.29579 − 0.35004·log10(cintura + cadera − cuello) + 0.22100·log10(altura)) − 450` | `waist` de la fila (+ `hip` en mujeres), `neck_cm`, `height_cm` y `sex` del perfil |
+| `muscle_mass_kg` | Músculo esquelético, modelo antropométrico de Lee et al. 2000 (Am J Clin Nutr) `0.244·peso + 7.8·altura_m + 6.6·sexo − 0.098·edad − 3.3` (sexo 1 hombre / 0 mujer, término de raza 0) | `weight` de la fila, edad en la fecha de la fila, `height_cm` y `sex` del perfil |
+| `muscle_mass_pct` | `muscle_mass_kg / peso × 100` (kg del usuario o calculados) | `weight` de la fila |
+| `daily_kcal` | TMB de Mifflin-St Jeor (hombre `10P + 6.25A − 5E + 5`, mujer `… − 161`) × multiplicador de actividad, redondeado | `weight` de la fila, edad en la fecha de la fila, `height_cm`, `sex` y `activity_level` del perfil |
+
+```json
+{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "chest": null, "hip": null, "arm": null, "leg": null, "body_fat_pct": 18.4, "body_fat_pct_source": "calc", "muscle_mass_kg": 33.3, "muscle_mass_pct": 41.6, "muscle_mass_source": "calc", "daily_kcal": 2712, "daily_kcal_source": "calc", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
 ```
 
 ### GET · POST /photos/
