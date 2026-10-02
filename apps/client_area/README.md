@@ -116,6 +116,10 @@ Never `date.today()`:
 - Photo slots show their thumbnail or a "+"; clicking either uploads (or replaces) the slot.
 - The add button and the row delete reuse `cotton/grid_add_button` and `cotton/grid_row_delete`,
   shared with the Programa table. Deleting a row only sets `hidden_by_advisor`.
+- **Productos nutricionales** use the same grid (`views.RECORD_GRIDS["product"]`, `ClientProductForm`
+  with `CellFormMixin`, no one-row-per-date rule): Añadir (`add_product_row`) inserts an empty row
+  dated today on top and each cell is saved on `change`. Its delete removes the row
+  (`client_area_delete_product`). The API skips rows whose product name is still empty.
 
 ### Programa table
 
@@ -171,7 +175,7 @@ mode. Plans and copy-from-client keep each element's `unlock_day`.
 | `services/profiles.py` | `get_or_create_client_profile`; Fam Fit "Mi perfil" (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
 | `services/body.py` | Body composition of a measurement row: U.S. Navy body fat %, Lee 2000 skeletal muscle, Mifflin-St Jeor daily kcal; activity levels and value ranges |
 | `services/programs.py` | Working assignment, `activate_program` / `deactivate_program`, `start_program_for_request`, end date, program day, progress, contact status and list filter |
-| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, one record per date), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
+| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, one record per date), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Advisor's client-area boards and catalog search |
 | `services/pane.py` | Tools pane context, `build_catalog_context`, WhatsApp URLs |
@@ -256,16 +260,13 @@ URL prefix: **`/client-area/`**
 | Endpoint | Name | Response |
 |---|---|---|
 | `load-pane/` | `load_client_area_pane` | Tools partial (`client-area-tools.html`) |
-| `forms/<kind>/` | `client_area_tool_form` | Form partial for the shared modal (`views.TOOL_FORMS`) |
 | `access/activate/` · `deactivate/` | `client_area_activate_access`, `client_area_deactivate_access` | Tools partial |
-| `records/<kind>/add/` (`kind` = `measurement` \| `photo`) | `client_area_add_record` | Table partial; 422 toast if today already has a row |
+| `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Table partial; 422 toast if today already has a row (Evolución / Fotos) |
 | `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | The cell (errors inline, 200), or the table after a date change |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Table partial |
 | `program/entries/add/` | `client_area_add_program_entry` | Program table partial (new row) |
 | `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` or `board_item`): program table partial; 422 toast if invalid, 404 for an unknown slot |
 | `program/files/<id>/delete/` · `program/entries/<id>/delete/` | `client_area_delete_program_file`, `client_area_delete_program_entry` | Program table partial |
-| `products/add/` | `client_area_add_product` | Table partial, or the form with errors |
-| `products/<id>/edit/` | `client_area_edit_product` | GET: filled form; POST: table partial, or the form with errors |
 | `products/<id>/delete/` | `client_area_delete_product` | Table partial |
 | `academy/` (GET) | `client_area_academy` | Academy section with the program folders |
 | `academy/toggle/` | `client_area_toggle_academy` | Academy section (keeps the program posted as `program_id` open) |
@@ -284,7 +285,7 @@ URL prefix: **`/client-area/`**
 
 ### Shared form modal
 
-- Rows of products and academy are added from an **Añadir**
+- Academy elements are added from an **Añadir contenido**
   button that opens `#clientAreaFormModal` (`components/modals/client-area-modals.html`, included by
   `contacts.html` outside `#contactModal`, together with the catalog picker).
 - `data-ca-open-form` opens it with `Modal.show()`, not `data-bs-toggle`, so `#contactModal` stays
@@ -292,8 +293,8 @@ URL prefix: **`/client-area/`**
   `hx-swap-oob`.
 - On success the view swaps only the table partial and sends `showToast` + `clientAreaFormSaved`
   (closes the modal). Invalid forms are re-rendered inside the modal with **200** (`HX-Retarget`).
-- Add modals are one column. `cotton/tool_add_button` takes an optional `url` for forms of a
-  nested object (academy elements of a program).
+- Add modals are one column. `cotton/tool_add_button` takes the form `url` (the academy elements
+  of the open program).
 - **Form sections.** Fields carry the repo's section attrs (`data_section` /
   `data_section_label`, as in `components/form-model.html`). `client-area-tool-form.html` prints
   the section title when it changes, and `cotton/form_field` hides the field label inside a
@@ -301,16 +302,17 @@ URL prefix: **`/client-area/`**
 
 ### Pane sections
 
+- **Confirmations** — every `hx-confirm` inside `.client-area-tools` opens the global
+  `#globalConfirmModal` (`openGlobalConfirmModal`, `static/js/global_confirm.js`) instead of the
+  browser dialog: an `htmx:confirm` listener in `client_area_tools.js` issues the request on confirm.
 - **Access** — access code with copy, accept request (start date and duration, see above),
   activate/deactivate access, WhatsApp link,
   App Store / Play Store badges (placeholders).
 - **Evolución / Fotos** — horizontal scroll, edited inline (see *Evolución / Fotos tables*).
   Deleting any row (client or advisor source) only sets `hidden_by_advisor`: the row leaves the web
   pane, the Fam Fit API still returns it.
-- **Productos nutricionales** — `ClientProductForm` (date, products, observations; no catalog
-  picker). Clicking a row opens the same modal filled in (`data-ca-open-form` + `hx-get`); the delete
-  cell is `data-ca-row-action`, ignored by the row click, with an `hx-confirm`
-  `btn-outline-danger` button. Delete removes the row. The API reads products live (no cache).
+- **Productos nutricionales** — Fecha, Productos, Observaciones, edited inline like Evolución (see
+  *Evolución / Fotos tables*). Delete removes the row. The API reads products live (no cache).
 - **Programa** — `client-area-program-table.html` (`#caProgramTable`, swapped `outerHTML`):
   Fecha, Alimentación, Deporte, Otros and a row delete (`hx-confirm`). Rows come from
   `services.pane.build_program_rows` (`ProgramCell` per column).

@@ -190,7 +190,7 @@ Scheduled program in `/me/`:
 | `recorded_on` | `YYYY-MM-DD` | Date set by the advisor |
 
 Products are plain text rows with no image or board item. Edits and deletes in the pane show up on
-the next request.
+the next request; a row the advisor added but has not named yet is left out of the lists.
 
 ### Lesson
 

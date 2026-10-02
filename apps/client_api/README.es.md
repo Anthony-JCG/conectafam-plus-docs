@@ -191,7 +191,8 @@ Programa programado en `/me/`:
 | `recorded_on` | `YYYY-MM-DD` | Fecha que fija el asesor |
 
 Los productos son filas de texto, sin imagen ni elemento de board. Lo que se edite o borre en el
-panel aparece en la siguiente petición.
+panel aparece en la siguiente petición; una fila que el asesor añadió y aún no nombró queda fuera de
+las listas.
 
 ### Lesson
 

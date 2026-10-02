@@ -126,6 +126,11 @@ zonas distintas. Nunca `date.today()`:
 - El botón de añadir y el de borrar fila reutilizan `cotton/grid_add_button` y
   `cotton/grid_row_delete`, los mismos de la tabla Programa. Borrar una fila solo marca
   `hidden_by_advisor`.
+- **Productos nutricionales** usan la misma tabla (`views.RECORD_GRIDS["product"]`,
+  `ClientProductForm` con `CellFormMixin`, sin la regla de una fila por fecha): Añadir
+  (`add_product_row`) inserta arriba una fila vacía con la fecha de hoy y cada celda se guarda en
+  `change`. Su borrar elimina la fila (`client_area_delete_product`). La API omite las filas cuyo
+  nombre de producto sigue vacío.
 
 ### Tabla Programa
 
@@ -185,7 +190,7 @@ cada elemento.
 | `services/profiles.py` | `get_or_create_client_profile`; "Mi perfil" de Fam Fit (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
 | `services/body.py` | Composición corporal de una fila de medidas: % de grasa U.S. Navy, músculo esquelético Lee 2000, kcal diarias Mifflin-St Jeor; niveles de actividad y rangos de valores |
 | `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, `start_program_for_request`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
-| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product(profile, data)`, `hide_by_advisor` |
+| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
 | `services/pane.py` | Contexto del panel, `build_catalog_context`, URLs de WhatsApp |
@@ -272,16 +277,13 @@ Prefijo de URL: **`/client-area/`**
 | Endpoint | Nombre | Respuesta |
 |---|---|---|
 | `load-pane/` | `load_client_area_pane` | Parcial de herramientas (`client-area-tools.html`) |
-| `forms/<kind>/` | `client_area_tool_form` | Parcial del formulario para el modal compartido (`views.TOOL_FORMS`) |
 | `access/activate/` · `deactivate/` | `client_area_activate_access`, `client_area_deactivate_access` | Parcial de herramientas |
-| `records/<kind>/add/` (`kind` = `measurement` \| `photo`) | `client_area_add_record` | Parcial de la tabla; toast 422 si hoy ya tiene fila |
+| `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Parcial de la tabla; toast 422 si hoy ya tiene fila (Evolución / Fotos) |
 | `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | La celda (errores en la celda, 200), o la tabla tras cambiar la fecha |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Parcial de la tabla |
 | `program/entries/add/` | `client_area_add_program_entry` | Parcial de la tabla del programa (fila nueva) |
 | `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` o `board_item`): parcial de la tabla del programa; toast 422 si no es válido, 404 si el hueco no existe |
 | `program/files/<id>/delete/` · `program/entries/<id>/delete/` | `client_area_delete_program_file`, `client_area_delete_program_entry` | Parcial de la tabla del programa |
-| `products/add/` | `client_area_add_product` | Parcial de la tabla, o el formulario con errores |
-| `products/<id>/edit/` | `client_area_edit_product` | GET: formulario relleno; POST: parcial de la tabla, o el formulario con errores |
 | `products/<id>/delete/` | `client_area_delete_product` | Parcial de la tabla |
 | `academy/` (GET) | `client_area_academy` | Sección de academia con las carpetas de programas |
 | `academy/toggle/` | `client_area_toggle_academy` | Sección de academia (el programa enviado en `program_id` sigue abierto) |
@@ -300,8 +302,8 @@ Prefijo de URL: **`/client-area/`**
 
 ### Modal de formulario compartido
 
-- Las filas de productos y academia se añaden con un botón
-  **Añadir** que abre `#clientAreaFormModal` (`components/modals/client-area-modals.html`, incluido
+- Los elementos de academia se añaden con un botón
+  **Añadir contenido** que abre `#clientAreaFormModal` (`components/modals/client-area-modals.html`, incluido
   en `contacts.html` fuera de `#contactModal`, junto al selector del catálogo).
 - `data-ca-open-form` lo abre con `Modal.show()` y no con `data-bs-toggle`, para que
   `#contactModal` no se cierre. El parcial del formulario (`client-area-tool-form.html`) rellena el
@@ -309,8 +311,8 @@ Prefijo de URL: **`/client-area/`**
 - Si se guarda bien, la vista solo reemplaza el parcial de la tabla y envía `showToast` +
   `clientAreaFormSaved` (cierra el modal). Con errores, el formulario se vuelve a pintar dentro del
   modal con un **200** (`HX-Retarget`).
-- Los modales de alta son de una columna. `cotton/tool_add_button` acepta un `url` opcional para
-  formularios de un objeto anidado (los elementos de academia de un programa).
+- Los modales de alta son de una columna. `cotton/tool_add_button` recibe el `url` del formulario (los
+  elementos de academia del programa abierto).
 - **Secciones del formulario.** Los campos llevan los attrs de sección del repo (`data_section` /
   `data_section_label`, como en `components/form-model.html`). `client-area-tool-form.html` pinta
   el título de la sección cuando cambia, y `cotton/form_field` oculta la etiqueta del campo dentro de
@@ -318,17 +320,19 @@ Prefijo de URL: **`/client-area/`**
 
 ### Secciones del panel
 
+- **Confirmaciones** — cada `hx-confirm` dentro de `.client-area-tools` abre el modal global
+  `#globalConfirmModal` (`openGlobalConfirmModal`, `static/js/global_confirm.js`) en vez del
+  diálogo del navegador: un listener de `htmx:confirm` en `client_area_tools.js` lanza la petición al
+  confirmar.
 - **Acceso** — código de acceso con copiar, aceptar solicitud (fecha de inicio y duración, ver
   arriba), activar/desactivar el acceso, enlace
   de WhatsApp y badges de App Store / Play Store (provisionales).
 - **Evolución / Fotos** — con scroll horizontal y edición en la propia tabla (ver *Tablas Evolución
   / Fotos*). Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Fam Fit la sigue
   devolviendo.
-- **Productos nutricionales** — `ClientProductForm` (fecha, productos, observaciones; sin selector
-  del catálogo). Al pulsar una fila se abre el mismo modal ya relleno (`data-ca-open-form` +
-  `hx-get`); la celda de borrar es `data-ca-row-action`, el clic de la fila no la tiene en cuenta, y
-  lleva un botón `btn-outline-danger` con `hx-confirm`. Borrar elimina la fila. La API lee los
-  productos en directo, sin caché.
+- **Productos nutricionales** — Fecha, Productos, Observaciones, editados en la propia tabla como
+  Evolución (ver *Tablas Evolución / Fotos*). Borrar elimina la fila. La API lee los productos en
+  directo, sin caché.
 - **Programa** — `client-area-program-table.html` (`#caProgramTable`, se sustituye con `outerHTML`):
   Fecha, Alimentación, Deporte, Otros y un botón para borrar la fila (`hx-confirm`). Las filas
   salen de `services.pane.build_program_rows` (un `ProgramCell` por columna).
