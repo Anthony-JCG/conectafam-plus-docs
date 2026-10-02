@@ -103,16 +103,18 @@ Never `date.today()`:
 
 - **One row per client and date** (the whole record, not a single value), shared by the advisor
   and the Fam Fit app. Migration `0015` merged the existing duplicates (see [Migrations](#migrations)).
-- **Añadir** (`add_record_row`) adds an empty row dated the client's today (`local_today()`). If today
-  already has a visible row it answers a 422 toast ("Ya existe un registro para esa fecha"); a
-  row of today **hidden by the advisor** still holds the date, so Añadir shows it again with its
-  values.
+- **Añadir** (`add_record_row`) adds an empty row dated the day after the client's latest row of
+  that table (rows **hidden by the advisor** included, they keep their date), or the client's today
+  (`local_today()`) when there is none. It never takes a used date, so it always works.
 - Each row is its record form (`services.pane.build_record_forms`, `ClientMeasurementForm` /
   `ClientProgressPhotoForm` with `RecordCellFormMixin`): every cell
   (`client-area-record-cell.html`) is a small form posted on `change` that saves only its field
-  and swaps the cell back (`outerHTML`); invalid values come back inline with **200**. A date
-  already used by another row (hidden ones included) shows "Ya existe un registro para esa fecha"
-  and is not saved; a valid new date returns the whole table (the rows are reordered).
+  of that same record and swaps the cell back (`outerHTML`); invalid values come back inline with
+  **200**. The date cell posts on `focusout` instead, since browsers fire `change` on every typed
+  segment of a date input. A date already used by another row of the client shows "Ya existe un
+  registro para esa fecha" (with "eliminado del panel, el cliente aún lo ve" when that row is
+  hidden) and is not saved; a new valid date returns the whole table with `HX-Retarget` to the
+  table (the rows are reordered), so it replaces the table, not the cell.
 - Photo slots show their thumbnail or a "+"; clicking either uploads (or replaces) the slot.
 - The add button and the row delete reuse `cotton/grid_add_button` and `cotton/grid_row_delete`,
   shared with the Programa table. Deleting a row only sets `hidden_by_advisor`.
@@ -261,8 +263,8 @@ URL prefix: **`/client-area/`**
 |---|---|---|
 | `load-pane/` | `load_client_area_pane` | Tools partial (`client-area-tools.html`) |
 | `access/activate/` · `deactivate/` | `client_area_activate_access`, `client_area_deactivate_access` | Tools partial |
-| `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Table partial; 422 toast if today already has a row (Evolución / Fotos) |
-| `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | The cell (errors inline, 200), or the table after a date change |
+| `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Table partial |
+| `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | The cell (errors inline, 200), or the table (`HX-Retarget`) after a date change |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Table partial |
 | `program/entries/add/` | `client_area_add_program_entry` | Program table partial (new row) |
 | `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` or `board_item`): program table partial; 422 toast if invalid, 404 for an unknown slot |

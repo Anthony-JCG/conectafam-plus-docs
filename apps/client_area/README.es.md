@@ -110,17 +110,19 @@ zonas distintas. Nunca `date.today()`:
 - **Una fila por cliente y fecha** (el registro entero, no un valor suelto), compartida por el
   asesor y la app Fam Fit. La migración `0015` fusionó los duplicados que había (ver
   [Migraciones](#migraciones)).
-- **Añadir** (`add_record_row`) crea una fila vacía con la fecha de hoy del cliente (`local_today()`). Si
-  hoy ya tiene una fila visible responde con un toast 422 ("Ya existe un registro para esa fecha");
-  una fila de hoy **oculta por el asesor** sigue ocupando la fecha, así que Añadir la vuelve a
-  mostrar con sus valores.
+- **Añadir** (`add_record_row`) crea una fila vacía con el día siguiente a la última fila del
+  cliente en esa tabla (también las **ocultas por el asesor**, que conservan su fecha), o con el hoy
+  del cliente (`local_today()`) si no hay ninguna. Nunca usa una fecha ocupada, así que siempre
+  funciona.
 - Cada fila es el formulario de su registro (`services.pane.build_record_forms`,
   `ClientMeasurementForm` / `ClientProgressPhotoForm` con `RecordCellFormMixin`): cada celda
   (`client-area-record-cell.html`) es un formulario pequeño que se envía en `change`, guarda solo su
-  campo y se reemplaza (`outerHTML`); un valor no válido vuelve con el error en la celda y un
-  **200**. Una fecha que ya usa otra fila (también las ocultas) muestra "Ya existe un registro para
-  esa fecha" y no se guarda; una fecha nueva válida devuelve la tabla entera (las filas se
-  reordenan).
+  campo en ese mismo registro y se reemplaza (`outerHTML`); un valor no válido vuelve con el error en
+  la celda y un **200**. La celda de fecha se envía en `focusout`, porque el navegador lanza
+  `change` con cada parte que se teclea de una fecha. Una fecha que ya usa otra fila del cliente
+  muestra "Ya existe un registro para esa fecha" (con "eliminado del panel, el cliente aún lo ve" si
+  esa fila está oculta) y no se guarda; una fecha nueva válida devuelve la tabla entera con
+  `HX-Retarget` a la tabla (las filas se reordenan), así que sustituye la tabla y no la celda.
 - Cada hueco de foto muestra su miniatura o un "+"; al pulsar cualquiera de los dos se sube (o se
   cambia) la foto.
 - El botón de añadir y el de borrar fila reutilizan `cotton/grid_add_button` y
@@ -278,8 +280,8 @@ Prefijo de URL: **`/client-area/`**
 |---|---|---|
 | `load-pane/` | `load_client_area_pane` | Parcial de herramientas (`client-area-tools.html`) |
 | `access/activate/` · `deactivate/` | `client_area_activate_access`, `client_area_deactivate_access` | Parcial de herramientas |
-| `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Parcial de la tabla; toast 422 si hoy ya tiene fila (Evolución / Fotos) |
-| `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | La celda (errores en la celda, 200), o la tabla tras cambiar la fecha |
+| `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Parcial de la tabla |
+| `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | La celda (errores en la celda, 200), o la tabla (`HX-Retarget`) tras cambiar la fecha |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Parcial de la tabla |
 | `program/entries/add/` | `client_area_add_program_entry` | Parcial de la tabla del programa (fila nueva) |
 | `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` o `board_item`): parcial de la tabla del programa; toast 422 si no es válido, 404 si el hueco no existe |
