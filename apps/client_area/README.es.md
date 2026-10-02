@@ -26,7 +26,7 @@ Relación con las apps núcleo:
 
 | Modelo | Relaciones y campos |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único, `access_status` (`none` / `pending` / `active` / `deactivated`) y `time_zone` (zona IANA del dispositivo, ver [Fechas locales](#fechas-locales)). "Mi perfil" de Fam Fit: `sex` (`male` / `female`), `height_cm`, `neck_cm`, `activity_level` (1–5); la fecha de nacimiento es `contact.date_of_birth`. Solo API, no sale en el panel web. |
+| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único, `access_status` (`none` / `pending` / `active` / `deactivated`) y `time_zone` (zona IANA del dispositivo, ver [Fechas locales](#fechas-locales)). "Mi perfil" de Fam Fit: `sex` (`male` / `female`), `height_cm`, `activity_level` (1–5); la fecha de nacimiento es `contact.date_of_birth`. Solo API, no sale en el panel web. |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`, `unlocked_through_day` (día del programa alcanzado en periodos anteriores). La fecha de fin se calcula (`start_date + duration_days`) y no se guarda. Se reutiliza en cada renovación. |
 | `ClientProgramEntry` | Fila de la tabla Programa: FK → asignación (`program_entries`); `assigned_on` (por defecto `timezone.localdate`). Ordenadas de más nueva a más antigua (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | Una celda: FK → fila (`files`); hueco `nutrition` / `sport` / `other`, único por fila; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
@@ -188,7 +188,7 @@ cada elemento.
 | `services/access_actions.py` | Aceptar solicitudes, activar/desactivar el acceso, darlo al iniciar el programa, quitarlo al terminar, textos de WhatsApp de continuidad |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
 | `services/profiles.py` | `get_or_create_client_profile`; "Mi perfil" de Fam Fit (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
-| `services/body.py` | Composición corporal de una fila de medidas: % de grasa U.S. Navy, músculo esquelético Lee 2000, kcal diarias Mifflin-St Jeor; niveles de actividad y rangos de valores |
+| `services/body.py` | Composición corporal de una fila de medidas: músculo esquelético Lee 2000, kcal diarias Mifflin-St Jeor, IMC y su categoría (el % de grasa es solo el valor del cliente); niveles de actividad y rangos de valores |
 | `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, `start_program_for_request`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
 | `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
@@ -406,6 +406,7 @@ del contacto, qué pide (acceso, o continuar el programa con el número de pedid
 | `0015_records_by_date_and_renewals` | Añade `ClientProgramAssignment.unlocked_through_day`. Datos (modelos históricos): fusiona las medidas / fotos duplicadas de un cliente y fecha en la fila más reciente, con el último valor no vacío de cada campo / hueco (queda oculta solo si lo estaban todas); en clientes con varios programas, el último toma las filas de la tabla Programa, los productos y la academia que le falten del programa anterior más reciente que los tenga, y `unlocked_through_day` de los periodos anteriores. Después, único (`client_profile`, `recorded_on`) en los dos modelos. Los archivos de fotos de los duplicados borrados que la fila fusionada no conserva se borran del storage |
 | `0016_clientprofile_time_zone` | Añade `ClientProfile.time_zone` |
 | `0017_client_body_composition` | Añade `ClientProfile.sex` / `height_cm` / `neck_cm` / `activity_level` y `ClientMeasurement.body_fat_pct` / `muscle_mass_kg`. Datos: un `bioimpedance.body_fat_pct` (2–75) / `muscle_mass_kg` (10–150) numérico se copia a su campo |
+| `0018_remove_clientprofile_neck_cm` | Elimina `ClientProfile.neck_cm` (el % de grasa ya no se calcula) |
 
 Los `AcademyPlanItem` guardados desde asignaciones en modo "all" conservan el día que tenían. El
 contenido propio de las lecciones en los campos que borra `0011` (URL de vídeo, vídeo, adjunto) no se

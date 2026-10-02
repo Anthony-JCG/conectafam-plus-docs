@@ -117,7 +117,7 @@ Sin ella se usa la zona del servidor (`settings.TIME_ZONE`).
 | POST | `/auth/logout/` | token | Borrar el token del dispositivo |
 | POST | `/auth/fcm-token/` | token + Firebase | Registrar el token FCM del dispositivo |
 | GET | `/me/` | token | Perfil básico + resumen del programa + `profile_complete` |
-| GET · PATCH | `/profile/` | token | "Mi perfil": sexo, fecha de nacimiento, altura, cuello, nivel de actividad |
+| GET · PATCH | `/profile/` | token | "Mi perfil": sexo, fecha de nacimiento, altura, nivel de actividad |
 | GET | `/home/` | token + activo | Saludo, métricas actuales, deltas semanales, WhatsApp del asesor |
 | GET | `/measurements/` | token | Historial de medidas (gráficas) |
 | POST | `/measurements/` | token + activo | Guarda la medida del día (upsert por fecha) |
@@ -264,12 +264,14 @@ programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_
     "arm": null,
     "leg": null,
     "body_fat_pct": 20.0,
-    "body_fat_pct_source": "user",
     "muscle_mass_kg": 31.0,
     "muscle_mass_pct": 43.1,
     "muscle_mass_source": "user",
     "daily_kcal": 2150,
     "daily_kcal_source": "calc",
+    "bmi": 23.5,
+    "bmi_category": "normal",
+    "bmi_category_label": "Peso normal",
     "bioimpedance": {},
     "source": "client",
     "created_at": "2026-09-25T18:00:00+00:00"
@@ -289,7 +291,7 @@ si hay menos de dos). `current` trae la composición corporal de esa fila (ver
 token.
 
 - **GET** → **200** los valores, `missing` (los vacíos, en este orden: `sex`, `birth_date`,
-  `height_cm`, `neck_cm`, `activity_level`), `profile_complete` y `activity_levels` (opciones para
+  `height_cm`, `activity_level`; todos los usan las fórmulas de músculo y kcal), `profile_complete` y `activity_levels` (opciones para
   pintar, con etiqueta y descripción en español).
 - **PATCH** JSON, cualquier subconjunto; `null` borra un valor → **200** el mismo cuerpo. **400**
   `{"error": ...}` si un valor está fuera de rango.
@@ -299,11 +301,10 @@ token.
 | `sex` | `male` / `female` (sexo biológico) |
 | `birth_date` | `YYYY-MM-DD`, edad 10–120; se guarda en el contacto del asesor (`Contact.date_of_birth`) |
 | `height_cm` | 100–250 |
-| `neck_cm` | 20–80 |
 | `activity_level` | 1–5 (multiplicadores 1.2 / 1.375 / 1.55 / 1.725 / 1.9) |
 
 ```json
-{ "sex": "female", "birth_date": "1990-05-02", "height_cm": 165, "neck_cm": 33 }
+{ "sex": "female", "birth_date": "1990-05-02", "height_cm": 165 }
 ```
 
 ```json
@@ -311,7 +312,6 @@ token.
   "sex": "female",
   "birth_date": "1990-05-02",
   "height_cm": 165.0,
-  "neck_cm": 33.0,
   "activity_level": null,
   "missing": ["activity_level"],
   "profile_complete": false,
@@ -335,7 +335,7 @@ otra vez el mismo día lo actualiza en lugar de añadir una fila.
 - **GET** → **200** `{"measurements": [Measurement, ...]}`, de la más reciente a la más antigua.
   `?recorded_on=YYYY-MM-DD` devuelve solo ese día (`[]` o una fila) para precargar el formulario.
 - **POST** JSON, upsert del `recorded_on`: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`,
-  los valores opcionales del usuario `body_fat_pct` (2–75) y `muscle_mass_kg` (10–150; sustituye a
+  los valores opcionales del usuario `body_fat_pct` (2–75, nunca se calcula) y `muscle_mass_kg` (10–150; sustituye a
   `bioimpedance.muscle_mass_kg`), y `bioimpedance` (otras lecturas, formato libre). Solo cambian las claves enviadas; `null` borra un valor; `bioimpedance` se
   reemplaza entero. `recorded_on` puede ser como mucho el mañana del cliente (margen por si la zona
   guardada está desfasada).
@@ -352,26 +352,32 @@ Segundo guardado del día (`chest` ya estaba guardado y se mantiene):
 ```
 
 ```json
-{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "body_fat_pct_source": null, "muscle_mass_kg": null, "muscle_mass_pct": null, "muscle_mass_source": null, "daily_kcal": null, "daily_kcal_source": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
+{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "muscle_mass_pct": null, "muscle_mass_source": null, "daily_kcal": null, "daily_kcal_source": null, "bmi": null, "bmi_category": null, "bmi_category_label": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
 ```
 
 #### Composición corporal
 
-Cada fila de medidas (lista, respuesta del POST, `current` de `/home/`) trae `body_fat_pct` +
-`body_fat_pct_source`, `muscle_mass_kg` + `muscle_mass_pct` + `muscle_mass_source` y `daily_kcal` +
-`daily_kcal_source`. El origen es `user` justo cuando el valor está guardado en la fila (lo
-introdujo el cliente, siempre manda), `calc` (calculado) o `null` junto al valor si falta algún dato (nunca se inventa). Se
-calcula con `/profile/` y la fila (`client_area.services.body`):
+Cada fila de medidas (lista, respuesta del POST, `current` de `/home/`) trae `body_fat_pct`,
+`muscle_mass_kg` + `muscle_mass_pct` + `muscle_mass_source`, `daily_kcal` + `daily_kcal_source` y
+`bmi` + `bmi_category` + `bmi_category_label`.
+
+- `body_fat_pct` es solo el valor que introdujo el cliente (si no, `null`); nunca se calcula.
+- El origen es `user` justo cuando el valor está guardado en la fila (lo introdujo el cliente,
+  siempre manda), `calc` (calculado) o `null` junto al valor si falta algún dato (nunca se inventa).
+- El `bmi` (IMC) siempre se calcula: no se guarda ni se acepta en el POST.
+
+Se calcula con `/profile/` y la fila (`client_area.services.body`):
 
 | Valor | Fórmula | Datos |
 |---|---|---|
-| `body_fat_pct` | U.S. Navy (Hodgdon & Beckett), cm, log10. Hombre `495 / (1.0324 − 0.19077·log10(cintura − cuello) + 0.15456·log10(altura)) − 450`; mujer `495 / (1.29579 − 0.35004·log10(cintura + cadera − cuello) + 0.22100·log10(altura)) − 450` | `waist` de la fila (+ `hip` en mujeres), `neck_cm`, `height_cm` y `sex` del perfil |
 | `muscle_mass_kg` | Músculo esquelético, modelo antropométrico de Lee et al. 2000 (Am J Clin Nutr) `0.244·peso + 7.8·altura_m + 6.6·sexo − 0.098·edad − 3.3` (sexo 1 hombre / 0 mujer, término de raza 0) | `weight` de la fila, edad en la fecha de la fila, `height_cm` y `sex` del perfil |
 | `muscle_mass_pct` | `muscle_mass_kg / peso × 100` (kg del usuario o calculados) | `weight` de la fila |
 | `daily_kcal` | TMB de Mifflin-St Jeor (hombre `10P + 6.25A − 5E + 5`, mujer `… − 161`) × multiplicador de actividad, redondeado | `weight` de la fila, edad en la fecha de la fila, `height_cm`, `sex` y `activity_level` del perfil |
+| `bmi` | `peso / altura_m²`, 1 decimal | `weight` de la fila, `height_cm` del perfil |
+| `bmi_category` / `bmi_category_label` | Según el `bmi` redondeado: `< 18.5` `underweight` "Bajo peso", `< 25` `normal` "Peso normal", `< 30` `overweight` "Sobrepeso", si no `obese` "Obesidad" | `bmi` |
 
 ```json
-{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "chest": null, "hip": null, "arm": null, "leg": null, "body_fat_pct": 18.4, "body_fat_pct_source": "calc", "muscle_mass_kg": 33.3, "muscle_mass_pct": 41.6, "muscle_mass_source": "calc", "daily_kcal": 2712, "daily_kcal_source": "calc", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
+{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "chest": null, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": 33.3, "muscle_mass_pct": 41.6, "muscle_mass_source": "calc", "daily_kcal": 2712, "daily_kcal_source": "calc", "bmi": 24.7, "bmi_category": "normal", "bmi_category_label": "Peso normal", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
 ```
 
 ### GET · POST /photos/

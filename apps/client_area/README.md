@@ -25,7 +25,7 @@ Relationship to the core apps:
 
 | Model | Relationships and fields |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. Unique `access_code`, `access_status` (`none` / `pending` / `active` / `deactivated`), `time_zone` (device IANA zone, see [Local dates](#local-dates)). Fam Fit "Mi perfil": `sex` (`male` / `female`), `height_cm`, `neck_cm`, `activity_level` (1–5); the birth date is `contact.date_of_birth`. API only, not in the web pane. |
+| `ClientProfile` | OneToOne → `communication.Contact`. Unique `access_code`, `access_status` (`none` / `pending` / `active` / `deactivated`), `time_zone` (device IANA zone, see [Local dates](#local-dates)). Fam Fit "Mi perfil": `sex` (`male` / `female`), `height_cm`, `activity_level` (1–5); the birth date is `contact.date_of_birth`. API only, not in the web pane. |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`, `unlocked_through_day` (program day reached in previous periods). The end date is derived (`start_date + duration_days`), never stored. Reused on every renewal. |
 | `ClientProgramEntry` | Row of the Programa table: FK → assignment (`program_entries`); `assigned_on` (defaults to `timezone.localdate`). Ordered newest first (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | One cell: FK → entry (`files`); slot `nutrition` / `sport` / `other`, unique per entry; FK → `BoardItem` (the file; uploads become board items). |
@@ -173,7 +173,7 @@ mode. Plans and copy-from-client keep each element's `unlock_day`.
 | `services/access_actions.py` | Accept requests, activate/deactivate access, grant on program start, clear on program end, continuity WhatsApp texts |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **or** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
 | `services/profiles.py` | `get_or_create_client_profile`; Fam Fit "Mi perfil" (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
-| `services/body.py` | Body composition of a measurement row: U.S. Navy body fat %, Lee 2000 skeletal muscle, Mifflin-St Jeor daily kcal; activity levels and value ranges |
+| `services/body.py` | Body composition of a measurement row: Lee 2000 skeletal muscle, Mifflin-St Jeor daily kcal, BMI and its category (body fat % is only the client's value); activity levels and value ranges |
 | `services/programs.py` | Working assignment, `activate_program` / `deactivate_program`, `start_program_for_request`, end date, program day, progress, contact status and list filter |
 | `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, one record per date), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
@@ -382,6 +382,7 @@ horas"), a WhatsApp button and **Admitir**.
 | `0015_records_by_date_and_renewals` | Adds `ClientProgramAssignment.unlocked_through_day`. Data (historical models): merges duplicate measurements / photos of a client and date into the newest row, with the latest non-empty value of each field / slot (hidden only if every duplicate was); for clients with several programs, the latest takes the grid rows, products and academy it lacks from the newest older program that has them, and `unlocked_through_day` from the older periods. Then unique (`client_profile`, `recorded_on`) on both models. Photo files of the deleted duplicates that the merged row does not keep are deleted from storage |
 | `0016_clientprofile_time_zone` | Adds `ClientProfile.time_zone` |
 | `0017_client_body_composition` | Adds `ClientProfile.sex` / `height_cm` / `neck_cm` / `activity_level` and `ClientMeasurement.body_fat_pct` / `muscle_mass_kg`. Data: a numeric `bioimpedance.body_fat_pct` (2–75) / `muscle_mass_kg` (10–150) is copied to its field |
+| `0018_remove_clientprofile_neck_cm` | Drops `ClientProfile.neck_cm` (body fat % is no longer calculated) |
 
 `AcademyPlanItem` rows saved from "all"-mode assignments keep their previous day. Own lesson content
 in the fields dropped by `0011` (video URL, video file, attachment) is not converted to board items.
