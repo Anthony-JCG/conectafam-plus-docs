@@ -124,7 +124,7 @@ Sin ella se usa la zona del servidor (`settings.TIME_ZONE`).
 | GET | `/photos/` | token | Historial de fotos de evolución |
 | POST | `/photos/` | token + activo | Guarda las fotos del día, multipart frente/espalda/lado (upsert por fecha) |
 | GET | `/program/` | token + activo | Último archivo de cada hueco (nutrition/sport/other) + productos |
-| GET | `/products/` | token | Productos del programa activo |
+| GET | `/products/` | token | Productos del programa en curso (activo o programado) |
 | GET | `/products/<id>/` | token | Detalle de producto (popup) |
 | GET | `/academy/` | token + activo | Programas formativos con sus lecciones (cada una con su disponibilidad) + `todays_lesson` |
 | GET | `/academy/lessons/<id>/` | token + activo | Detalle de la lección si está abierta |
@@ -140,8 +140,10 @@ Cualquier error inesperado devuelve **500** `{"error": "Internal server error."}
 
 `program` en `/me/`, `/home/` y `/program/` describe la asignación activa, o es `null` si no hay
 ninguna. `/me/` y `/home/` también devuelven un programa **programado** para empezar más adelante
-(un primer programa o una renovación), para que la app muestre "Tu programa inicia {start_date}";
-`/program/` y `/academy/` esperan a la fecha de inicio.
+(un primer programa o una renovación), para que la app muestre "Tu programa inicia {start_date}".
+`/program/` y `/products/` también lo devuelven con sus archivos y productos (y el resto de endpoints
+funciona); solo `/academy/` (Tu día) espera a la fecha de inicio y hasta entonces responde
+`academy_enabled: false`.
 
 ```json
 {
@@ -198,11 +200,11 @@ las listas.
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `id` | int | |
+| `id` | int | Estable mientras el cliente tenga el elemento (un elemento de plantilla conserva su id) |
 | `program_id` | int | Id de su programa formativo (`programs[].id` en `/academy/`) |
-| `title` | string | Título del elemento de board; si no, los 80 primeros caracteres del texto; si no, el título del adjunto; si no, `Lesson <id>` |
-| `unlock_day` | int | `0` = siempre disponible ("Siempre"); `N >= 1` = disponible desde el día `N` del programa ("Día N") |
-| `order` | int | Orden dentro de su programa; ordenad por él |
+| `title` | string | Título del contenido (contenido de academia de la plantilla o elemento de board); si no, los 80 primeros caracteres del texto; si no, el título del adjunto; si no, `Lesson <id>` |
+| `unlock_day` | int | `0` = siempre disponible ("Siempre"); `N >= 1` = disponible desde el día `N` del programa ("Día N"). Valor efectivo: el día propio del cliente o, si no tiene, el de la plantilla |
+| `order` | int | Posición dentro de su programa, desde 1 (primero los elementos de plantilla, en el orden de la plantilla, y después los propios del asesor); ordenad por él |
 | `unlocked` | bool | `unlock_day == 0`, `program_day >= unlock_day`, o un día ya alcanzado en un periodo anterior (una renovación reinicia `program_day` pero mantiene lo desbloqueado) |
 | `thumbnail_url` | string \| null | Vista previa absoluta del elemento de contenido, la imagen que muestra el board: miniatura `hqdefault` de YouTube, `mosaic_preview` de PDFs / imágenes / páginas. `null` si el board no tiene (vídeos subidos, texto, PDFs cuya vista previa no se pudo generar). También llega en lecciones bloqueadas |
 | `video_url` | string | URL de YouTube (`""` si no lo es o si está bloqueada) |
@@ -222,6 +224,12 @@ contenido rellena la clave de su tipo si sigue vacía:
 | Vídeo subido | `video_file_url` |
 | Texto | `text` |
 | PDF, imagen | `attachment_url` |
+
+Las lecciones de un **programa de plantilla** (el asesor asignó una plantilla de Videoteca) leen en
+vivo el contenido de academia de la plantilla: `video_url` es su enlace de YouTube, `text` su texto y
+`attachment_url` su adjunto; en ellas `video_file_url` siempre es `""`. Lo que se añade a la plantilla
+aparece como lecciones nuevas (ids nuevos) en la siguiente petición; un contenido que se quita de la
+plantilla, o que se oculta a este cliente, deja de listarse y su detalle responde `404`.
 
 ---
 
@@ -265,8 +273,6 @@ programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_
     "leg": null,
     "body_fat_pct": 20.0,
     "muscle_mass_kg": 31.0,
-    "muscle_mass_pct": 43.1,
-    "muscle_mass_source": "user",
     "daily_kcal": 2150,
     "daily_kcal_source": "calc",
     "bmi": 23.5,
@@ -291,7 +297,7 @@ si hay menos de dos). `current` trae la composición corporal de esa fila (ver
 token.
 
 - **GET** → **200** los valores, `missing` (los vacíos, en este orden: `sex`, `birth_date`,
-  `height_cm`, `activity_level`; todos los usan las fórmulas de músculo y kcal), `profile_complete` y `activity_levels` (opciones para
+  `height_cm`, `activity_level`; todos los usa la fórmula de kcal), `profile_complete` y `activity_levels` (opciones para
   pintar, con etiqueta y descripción en español).
 - **PATCH** JSON, cualquier subconjunto; `null` borra un valor → **200** el mismo cuerpo. **400**
   `{"error": ...}` si un valor está fuera de rango.
@@ -335,7 +341,7 @@ otra vez el mismo día lo actualiza en lugar de añadir una fila.
 - **GET** → **200** `{"measurements": [Measurement, ...]}`, de la más reciente a la más antigua.
   `?recorded_on=YYYY-MM-DD` devuelve solo ese día (`[]` o una fila) para precargar el formulario.
 - **POST** JSON, upsert del `recorded_on`: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`,
-  los valores opcionales del usuario `body_fat_pct` (2–75, nunca se calcula) y `muscle_mass_kg` (10–150; sustituye a
+  los valores opcionales del usuario `body_fat_pct` (2–75, nunca se calcula) y `muscle_mass_kg` (10–150, nunca se calcula; sustituye a
   `bioimpedance.muscle_mass_kg`), y `bioimpedance` (otras lecturas, formato libre). Solo cambian las claves enviadas; `null` borra un valor; `bioimpedance` se
   reemplaza entero. `recorded_on` puede ser como mucho el mañana del cliente (margen por si la zona
   guardada está desfasada).
@@ -352,32 +358,30 @@ Segundo guardado del día (`chest` ya estaba guardado y se mantiene):
 ```
 
 ```json
-{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "muscle_mass_pct": null, "muscle_mass_source": null, "daily_kcal": null, "daily_kcal_source": null, "bmi": null, "bmi_category": null, "bmi_category_label": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
+{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": null, "daily_kcal_source": null, "bmi": null, "bmi_category": null, "bmi_category_label": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
 ```
 
 #### Composición corporal
 
 Cada fila de medidas (lista, respuesta del POST, `current` de `/home/`) trae `body_fat_pct`,
-`muscle_mass_kg` + `muscle_mass_pct` + `muscle_mass_source`, `daily_kcal` + `daily_kcal_source` y
-`bmi` + `bmi_category` + `bmi_category_label`.
+`muscle_mass_kg`, `daily_kcal` + `daily_kcal_source` y `bmi` + `bmi_category` +
+`bmi_category_label`.
 
-- `body_fat_pct` es solo el valor que introdujo el cliente (si no, `null`); nunca se calcula.
-- El origen es `user` justo cuando el valor está guardado en la fila (lo introdujo el cliente,
-  siempre manda), `calc` (calculado) o `null` junto al valor si falta algún dato (nunca se inventa).
+- `body_fat_pct` y `muscle_mass_kg` son solo los valores que introdujo el cliente (si no, `null`);
+  nunca se calculan.
+- `daily_kcal_source` es `calc`, o `null` junto al valor si falta algún dato (nunca se inventa).
 - El `bmi` (IMC) siempre se calcula: no se guarda ni se acepta en el POST.
 
 Se calcula con `/profile/` y la fila (`client_area.services.body`):
 
 | Valor | Fórmula | Datos |
 |---|---|---|
-| `muscle_mass_kg` | Músculo esquelético, modelo antropométrico de Lee et al. 2000 (Am J Clin Nutr) `0.244·peso + 7.8·altura_m + 6.6·sexo − 0.098·edad − 3.3` (sexo 1 hombre / 0 mujer, término de raza 0) | `weight` de la fila, edad en la fecha de la fila, `height_cm` y `sex` del perfil |
-| `muscle_mass_pct` | `muscle_mass_kg / peso × 100` (kg del usuario o calculados) | `weight` de la fila |
 | `daily_kcal` | TMB de Mifflin-St Jeor (hombre `10P + 6.25A − 5E + 5`, mujer `… − 161`) × multiplicador de actividad, redondeado | `weight` de la fila, edad en la fecha de la fila, `height_cm`, `sex` y `activity_level` del perfil |
 | `bmi` | `peso / altura_m²`, 1 decimal | `weight` de la fila, `height_cm` del perfil |
 | `bmi_category` / `bmi_category_label` | Según el `bmi` redondeado: `< 18.5` `underweight` "Bajo peso", `< 25` `normal` "Peso normal", `< 30` `overweight` "Sobrepeso", si no `obese` "Obesidad" | `bmi` |
 
 ```json
-{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "chest": null, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": 33.3, "muscle_mass_pct": 41.6, "muscle_mass_source": "calc", "daily_kcal": 2712, "daily_kcal_source": "calc", "bmi": 24.7, "bmi_category": "normal", "bmi_category_label": "Peso normal", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
+{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "chest": null, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": 2712, "daily_kcal_source": "calc", "bmi": 24.7, "bmi_category": "normal", "bmi_category_label": "Peso normal", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
 ```
 
 ### GET · POST /photos/
@@ -412,7 +416,7 @@ Cada archivo de programa es un elemento del board del área de clientes del ases
 guarda ahí, en Nutrición / Deporte / Otros): `title` es el título del elemento, `file_url` su archivo
 o URL y `thumbnail_url` la vista previa absoluta que muestra la tabla web (`mosaic_preview` de un PDF
 o imagen, miniatura de YouTube), o `null` si el board no tiene (p. ej. un PDF cuya primera página no
-se pudo renderizar). Sin programa activo: `program: null`, huecos vacíos y `products: []`.
+se pudo renderizar). Sin programa en curso (activo o programado): `program: null`, huecos vacíos y `products: []`.
 
 La tabla Programa del asesor tiene filas con fecha y una celda por hueco; el cliente siempre sigue el
 **último archivo de cada hueco**. Por eso cada lista `files.<slot>` trae como mucho un archivo: la
@@ -425,7 +429,7 @@ local cada vez que se rellena una celda; `id` es el id de la celda.
 
 | Status | Body |
 |---|---|
-| `200` | `{"products": [Product, ...]}`, primero el `recorded_on` más reciente (solo el programa activo; `[]` si no hay) |
+| `200` | `{"products": [Product, ...]}`, primero el `recorded_on` más reciente (el programa en curso, activo o programado; `[]` si no hay) |
 | `200` | `{"product": Product}` en `/products/<id>/` (cualquier producto de este cliente) |
 | `404` | `{"error": "Product not found."}`: no existe, es de otro cliente o el asesor lo borró |
 
@@ -459,7 +463,7 @@ local cada vez que se rellena una celda; `id` es el id de la celda.
 
 | Campo | Notas |
 |---|---|
-| `academy_enabled` | Interruptor No/Sí del asesor; también es `false` si no hay programa activo |
+| `academy_enabled` | Interruptor No/Sí del asesor; también es `false` si no hay programa activo (así que mientras está programado) |
 | `program_day` | Día del programa empezando en 1; `null` sin fecha de inicio |
 | `todays_lesson` | Detalle de la primera lección (programas y luego lecciones, en orden) cuyo `unlock_day` coincide con `program_day`, o `null`. Las lecciones con `unlock_day: 0` nunca son `todays_lesson` |
 | `programs` | Programas formativos (las carpetas de Academia) ordenados por `order`: `id`, `name`, `order` y `lessons` (lista de Lesson con miniatura y claves de vídeo, sin `text` / `attachment_url`, ordenada por `order`). Cada lección lleva su `unlock_day` y se pueden mezclar los dos tipos |
@@ -472,6 +476,11 @@ lecciones llegan agrupadas en `programs[].lessons`, y todas (lista, `todays_less
 `title` de la lección ya no usa la URL del vídeo como alternativa (el contenido siempre viene de un
 elemento del board).
 
+**Cambio de contrato (plantillas de academia).** No se añade ni se quita ninguna clave. `order` pasa
+a ser la posición de la lección en su programa, desde 1 (antes era un valor guardado que podía tener
+huecos); ordenar por él sigue funcionando. `unlock_day` siempre es el día efectivo de la lección para
+este cliente.
+
 ### GET /academy/lessons/<id>/
 
 | Status | Body |
@@ -480,7 +489,7 @@ elemento del board).
 | `403` | `{"error": "Lesson is locked.", "unlock_day": 20, "unlocked": false}` |
 | `403` | `{"error": "Academy is not enabled."}` |
 | `403` | `{"error": "Access is not active.", "access_status": "..."}` |
-| `404` | `{"error": "Lesson not found."}` |
+| `404` | `{"error": "Lesson not found."}`: no existe, es de otro cliente, el asesor la ocultó o ya no está en su plantilla |
 
 ### POST /continuity/
 

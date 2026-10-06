@@ -20,7 +20,8 @@ Relación con las apps núcleo:
   [Board del catálogo](#board-del-catálogo) y [Almacenamiento en el board](#almacenamiento-en-el-board)).
 - **`pricing`** — vende el add-on; cuando termina, se pausan los programas del asesor (ver
   [Fin del add-on](#fin-del-add-on-programas-en-pausa)).
-- **`users.User`** — el asesor es dueño de `AcademyPlan`. El cliente nunca es este usuario.
+- **`users.User`** — el asesor (dueño del contacto y de sus propias plantillas de academia). El
+  cliente nunca es este usuario.
 
 ## Modelos y datos
 
@@ -31,19 +32,18 @@ Relación con las apps núcleo:
 | `ClientProgramEntry` | Fila de la tabla Programa: FK → asignación (`program_entries`); `assigned_on` (por defecto `timezone.localdate`). Ordenadas de más nueva a más antigua (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | Una celda: FK → fila (`files`); hueco `nutrition` / `sport` / `other`, único por fila; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
 | `ClientProduct` | FK → asignación; `recorded_on`, `products`, `observations`. Solo texto, sin elemento de board. |
-| `TrainingProgram` | Programa formativo: FK → asignación (`training_programs`); FK opcional → `AcademyPlan` (`source_plan`); `name`, `order`. Una carpeta de Academia. |
-| `ClientLesson` | FK → `TrainingProgram` (`lessons`); un elemento de academia: `board_item` (el contenido: vídeo subido, YouTube o cualquier elemento elegido), `text`, `attachment_item` (elemento PDF / imagen del board), `unlock_day`, `order`; FK opcional → `AcademyPlanItem` (`source_item`). |
-| `AcademyPlan` | FK → `users.User` (asesor). Plantilla de un programa formativo: su nombre y sus `AcademyPlanItem`. |
-| `AcademyPlanItem` | FK → `AcademyPlan`; `board_item`, `text`, `attachment_item`, `unlock_day`, `order`, igual que `ClientLesson`. |
+| `TrainingProgram` | Programa formativo: FK → asignación (`training_programs`); FK opcional → `boards.BoardFolder` (`template_folder`, `SET_NULL`: la plantilla de Videoteca que lee); `name`, `order`. Una carpeta de Academia. Una plantilla está como mucho una vez en la academia de un cliente (`training_program_assignment_template`). |
+| `ClientLesson` | FK → `TrainingProgram` (`lessons`); un elemento de academia, ordenado por `order`, `pk`. **Elemento propio**: `board_item` (contenido de YouTube), `text`, `attachment_item` (elemento PDF / imagen del board), `unlock_day`. **Elemento de plantilla**: FK → `BoardItem` (`template_item`, `CASCADE`) cuyo contenido lee; solo guarda lo que cambia para el cliente, `unlock_day` (`null` = el de la plantilla) y `hidden_by_advisor`. Una fila por programa y elemento de plantilla (`client_lesson_program_template_item`); `available_day` es el día efectivo. |
 | `ClientMeasurement` | FK → perfil; medidas, `body_fat_pct` / `muscle_mass_kg` opcionales del cliente (solo API) y `bioimpedance`; `source=client\|advisor` (quién la creó); `hidden_by_advisor`. Una fila por cliente y fecha (`client_measurement_profile_day`). |
 | `ClientProgressPhoto` | FK → perfil; frente, espalda y lado; `source`; `hidden_by_advisor`. Una fila por cliente y fecha (`client_photo_profile_day`). `save()` pasa cada hueco por `core.utils.files.process_image_field_if_changed`, como los demás modelos con imágenes: WebP (calidad 80, máx. 1280 px) y, al sustituir un hueco, se borra su archivo anterior (celda web y API). |
 | `ClientAccessRequest` | FK → perfil; `kind` primer acceso o continuidad; `order_number` / `purchase_date` opcionales. |
 
-Todo salvo `AcademyPlan` / `AcademyPlanItem` cuelga de `ClientProfile` con `CASCADE`: al borrar el
+Todo cuelga de `ClientProfile` con `CASCADE`: al borrar el
 contacto se borra su área de cliente completa (ver el README de `communication`). Los FK a
-`BoardItem` son `SET_NULL`: si se borra el elemento del board, la fila se queda sin él. La excepción
-es `ClientProgramFile.board_item` (`CASCADE`): una celda siempre tiene archivo, así que borrar el
-elemento vacía la celda.
+`BoardItem` son `SET_NULL`: si se borra el elemento del board, la fila se queda sin él. Las
+excepciones son `ClientProgramFile.board_item` (`CASCADE`): una celda siempre tiene archivo, así que
+borrar el elemento vacía la celda; y `ClientLesson.template_item` (`CASCADE`): borrar un contenido de
+academia de una plantilla lo quita a todos los clientes.
 
 ### Ciclo del programa
 
@@ -77,8 +77,8 @@ Un programa programado o activo está **en curso** (`assignment_is_running`, `as
   antes `activate_program` guarda en `unlocked_through_day` el día alcanzado en el periodo que
   termina (`reached_program_day`). `lesson_is_unlocked` abre una lección si
   `unlock_day <= unlocked_through_day` o si el día actual ya llegó, así que lo ya desbloqueado sigue
-  abierto y el resto sigue la nueva cuenta. Vive en la asignación del cliente: las plantillas
-  (`AcademyPlan`) y el contenido del board no se tocan.
+  abierto y el resto sigue la nueva cuenta. Vive en la asignación del cliente: las plantillas y el
+  contenido del board no se tocan.
 - **Aceptar una solicitud** (`start_program_for_request`). **Aceptar** (panel) y **Admitir** (home)
   abren el mismo formulario (`client-area-accept-request-form.html`) en un collapse de Bootstrap
   debajo de la solicitud, con la fecha de inicio y la duración. Por defecto: el hoy del cliente
@@ -125,13 +125,21 @@ zonas distintas. Nunca `date.today()`:
   `HX-Retarget` a la tabla (las filas se reordenan), así que sustituye la tabla y no la celda.
 - Cada hueco de foto muestra su miniatura o un "+"; al pulsar cualquiera de los dos se sube (o se
   cambia) la foto.
+- **Gráfica de Evolución**, debajo de la tabla de medidas: una línea por columna
+  (`build_measurement_chart`: Peso, Pecho, Brazo, Cadera, Cintura, Pierna, con los nombres de
+  `ClientMeasurementForm`; solo filas visibles y sin las celdas vacías). `client_area_tools.js` pide
+  su JSON (`client_area_measurement_chart`) y la dibuja con ApexCharts (CDN, cargado en
+  `contacts.html` como las estadísticas mensuales de la home); Desde / Hasta solo acotan el eje x.
+  Cada cambio guardado en una tabla envía el evento `clientAreaRecordsChanged` (`{"kind": ...}`) en
+  `HX-Trigger` (`views.RECORDS_CHANGED_EVENT`), y la gráfica se vuelve a pedir con los de
+  `measurement`.
 - El botón de añadir y el de borrar fila reutilizan `cotton/grid_add_button` y
   `cotton/grid_row_delete`, los mismos de la tabla Programa. Borrar una fila solo marca
   `hidden_by_advisor`.
 - **Productos nutricionales** usan la misma tabla (`views.RECORD_GRIDS["product"]`,
   `ClientProductForm` con `CellFormMixin`, sin la regla de una fila por fecha): Añadir
-  (`add_product_row`) inserta arriba una fila vacía con la fecha de hoy y cada celda se guarda en
-  `change`. Su borrar elimina la fila (`client_area_delete_product`). La API omite las filas cuyo
+  (`add_product_row`) inserta arriba una fila vacía y cada celda se guarda en `change`. Su fecha
+  (hoy) solo ordena las filas: el formulario no tiene campo de fecha ni la tabla columna de fecha. Su borrar elimina la fila (`client_area_delete_product`). La API omite las filas cuyo
   nombre de producto sigue vacío.
 
 ### Tabla Programa
@@ -158,15 +166,42 @@ Los programas son de la **asignación del cliente**, no del asesor:
 
 - La disponibilidad cuenta desde el día de programa de cada cliente, igual que ya hacían las
   lecciones.
-- Se reutilizan con **Plantillas**: un `AcademyPlan` guarda un programa formativo. "Guardar como
-  plantilla" (`save_program_as_plan`) guarda el programa abierto con su nombre y, si el asesor ya
-  tiene una plantilla con ese nombre, reemplaza sus elementos; "Añadir desde plantilla"
-  (`add_program_from_plan`) añade un programa nuevo con una copia de los elementos de la plantilla
-  (`source_plan` / `source_item`) y activa la academia. "Copiar de otro cliente"
-  (`copy_academy_from_client`) sustituye todos los programas del cliente por una copia de los del
-  otro.
-- El contenido reutilizable es el propio board: `Videoteca / <nombre del programa>` guarda lo que se
-  sube para cualquier cliente cuyo programa se llame así.
+- Se reutilizan con **Plantillas** (ver [Plantillas de academia](#plantillas-de-academia)). "Copiar
+  de otro cliente" (`copy_academy_from_client`) sustituye todos los programas del cliente por una
+  copia de los del otro (los programas de plantilla siguen apuntando a su plantilla, con los cambios
+  del otro cliente).
+- **Añadir contenido** añade un elemento propio solo de este cliente. Su enlace de YouTube y el
+  adjunto subido se guardan en `Otros / <nombre del programa>` del board del asesor.
+
+### Plantillas de academia
+
+Una plantilla es una **carpeta directamente dentro de Videoteca** (las plantillas se crean en el
+board, no en el panel). Cada elemento es un **Contenido de academia** del board (tipo `academy`, ver
+el README de `apps/boards`): disponibilidad (Siempre / Día N, `BoardItem.unlock_day`), un enlace de
+YouTube, un texto y un adjunto PDF / imagen, que se editan con `forms.AcademyContentForm`.
+
+| Plantilla | Dónde | Quién puede asignarla |
+|---|---|---|
+| De sistema | Carpeta en la Videoteca del catálogo (`USER_ROOT`) | Cualquier asesor con acceso |
+| Propia | Carpeta en la carpeta sombra de Videoteca del asesor | Solo ese asesor |
+
+`services/academy.academy_template_folders(user)` las devuelve de la más nueva a la más antigua (el
+board muestra Videoteca igual). "Añadir desde plantilla" (`add_program_from_template`) crea un
+programa que apunta a la carpeta (`template_folder`, con su nombre) y activa la academia; no se puede
+añadir la misma plantilla dos veces a un cliente.
+
+La plantilla manda y se lee **en vivo**:
+
+- `sync_template_lessons` crea la fila `ClientLesson` de cada contenido de academia de la carpeta (el id
+  que usa la app) al mostrar el programa; lo que se añada después llega también a los clientes que ya
+  la tenían.
+- Editar un contenido (texto, enlace, adjunto, día por defecto) lo cambia para todos los clientes.
+- Lo que se cambia para un cliente nunca toca la plantilla: la disponibilidad se guarda como cambio
+  propio (`set_lesson_unlock_day`) y borrar un elemento de plantilla solo lo oculta a ese cliente
+  (`hidden_by_advisor`). A un programa de plantilla también se le pueden añadir elementos propios.
+- `program_lessons(program)` / `shown_lessons` devuelven lo que se muestra: los elementos de plantilla
+  que siguen en la carpeta (en el orden del mosaico) y después los propios. Un contenido que se saca de
+  la carpeta deja de mostrarse; su fila conserva los cambios del cliente por si vuelve.
 
 ### Disponibilidad de la academia
 
@@ -177,10 +212,12 @@ Cada `ClientLesson` tiene su propia disponibilidad en `unlock_day` (`UNLOCK_DAY_
 | `0` | Siempre | Siempre, mientras la academia esté activada |
 | `N >= 1` | Día N | Cuando `program_day >= N` |
 
-`todays_lesson` es la primera lección (programas y lecciones en orden) cuyo `unlock_day` coincide con
+Un elemento de plantilla sin cambio propio usa el `unlock_day` de su contenido;
+`ClientLesson.available_day` es el valor efectivo que se usa aquí y en la API.
+
+`todays_lesson` es la primera lección (programas y lecciones en orden) cuyo día coincide con
 el día actual del programa; las de "Siempre" nunca lo son. La asignación solo guarda el interruptor No/Sí `academy_enabled`; no hay un
-modo para toda la academia. Las plantillas y la copia desde otro cliente conservan el `unlock_day` de
-cada elemento.
+modo para toda la academia. La copia desde otro cliente conserva la disponibilidad de cada elemento.
 
 ### Servicios
 
@@ -190,12 +227,12 @@ cada elemento.
 | `services/access_actions.py` | Aceptar solicitudes, activar/desactivar el acceso, darlo al iniciar el programa, quitarlo al terminar, textos de WhatsApp de continuidad |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
 | `services/profiles.py` | `get_or_create_client_profile`; "Mi perfil" de Fam Fit (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
-| `services/body.py` | Composición corporal de una fila de medidas: músculo esquelético Lee 2000, kcal diarias Mifflin-St Jeor, IMC y su categoría (el % de grasa es solo el valor del cliente); niveles de actividad y rangos de valores |
+| `services/body.py` | Composición corporal de una fila de medidas: kcal diarias Mifflin-St Jeor, IMC y su categoría (el % de grasa y la masa muscular son solo los valores del cliente); niveles de actividad y rangos de valores |
 | `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, `start_program_for_request`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
 | `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
-| `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
+| `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
-| `services/pane.py` | Contexto del panel, `build_catalog_context`, URLs de WhatsApp |
+| `services/pane.py` | Contexto del panel, `build_catalog_context`, `build_measurement_chart` (series de la gráfica de Evolución), URLs de WhatsApp |
 | `services/inbox.py` | `pending_access_requests_for_advisor` (de la más reciente a la más antigua, con contacto, URL de WhatsApp y antigüedad) para el bloque del home; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
 | `services/expiry.py` | Expiración horaria y `pause_programs_without_entitlement` |
 
@@ -208,8 +245,8 @@ FAM TEAM. Almacenamiento, permisos y carpetas sombra están en el README de `app
 
 | Parte | Dueño | Tipos permitidos | Qué puede hacer el asesor |
 |---|---|---|---|
-| Catálogo de sistema (Nutrición, Deporte, Videoteca, Otros) | `USER_ROOT` | PDF, imagen; Videoteca también vídeo subido y YouTube | Verlo y elegir elementos; añadir los suyos y subcarpetas dentro de sus carpetas (carpetas sombra) |
-| Contenido propio | Asesor | Carpetas, texto, imagen, PDF, vídeo subido, YouTube | CRUD completo dentro de las carpetas del catálogo; nada en la raíz del board |
+| Catálogo de sistema (Nutrición, Deporte, Videoteca, Otros) | `USER_ROOT` | PDF, imagen; Videoteca: solo plantillas (carpetas, con contenidos de academia dentro) | Verlo y elegir elementos; añadir los suyos y subcarpetas dentro de sus carpetas (carpetas sombra) |
+| Contenido propio | Asesor | Carpetas, texto, imagen, PDF, YouTube; Videoteca: solo sus plantillas | CRUD completo dentro de las carpetas del catálogo; nada en la raíz del board |
 
 - `services/pane.build_catalog_context` devuelve `catalog_board` (el board propio).
   `.client-area-tools` lleva su id y la URL de `board_mosaic_data`; el selector de
@@ -220,14 +257,16 @@ FAM TEAM. Almacenamiento, permisos y carpetas sombra están en el README de `app
   resultados con `textContent`.
 - `CatalogItemFormMixin` limita sus `catalog_fields` a
   `get_client_area_catalog_boards_queryset(asesor)`, así que no entra ningún elemento de otro board.
-- El widget del campo es `widgets.CatalogPickerInput(multiple=...)`: un botón "Añadir desde board"
-  y los ids ocultos que escribe `client_area_tools.js`, por nombre de campo (caben varios selectores
-  en un formulario).
+- Los vídeos subidos (contenido antiguo: los vídeos solo son de YouTube) y los contenidos de academia
+  (viven en su plantilla) nunca se ofrecen: el formulario, la búsqueda del catálogo y las fichas del
+  selector (`client_area_tools.js`) excluyen `CLIENT_AREA_PICKER_EXCLUDED_ITEM_TYPES`.
+- El widget del campo es `widgets.CatalogPickerInput`: un botón "Añadir desde board" y el id oculto
+  que escribe `client_area_tools.js`, por nombre de campo (caben varios selectores en un
+  formulario). Cada selector elige un elemento.
 
 | Herramienta | Selector |
 |---|---|
 | Celda del programa (`ProgramCellForm.board_item`, "Desde board" en el menú de la celda; abre la carpeta de la columna y guarda al elegir) | Un elemento |
-| Contenido de academia (`ClientLessonForm.board_items`) | Varios elementos, uno por elemento de academia |
 | Adjunto de academia (`ClientLessonForm.attachment_item`) | Un PDF o una imagen |
 | Productos nutricionales | Ninguno |
 
@@ -243,9 +282,10 @@ carpeta raíz del catálogo (`ensure_shadow_folder`); para `USER_ROOT`, la propi
 | Programa, columna Alimentación (`nutrition`) | Nutrición |
 | Programa, columna Deporte (`sport`) | Deporte |
 | Programa, columna Otros (`other`) | Otros |
-| Academia: vídeo, enlace de YouTube, adjunto | Videoteca / `<nombre del programa>` (la subcarpeta se crea con la primera subida) |
+| Academia (elemento propio): enlace de YouTube, adjunto | Otros / `<nombre del programa>` (la subcarpeta se crea con la primera subida) |
 
-`const.PROGRAM_SLOT_FOLDERS` relaciona cada hueco con su carpeta. La subcarpeta de Videoteca se busca
+`const.PROGRAM_SLOT_FOLDERS` relaciona cada hueco con su carpeta. Videoteca solo guarda plantillas. La
+subcarpeta de Otros se busca
 por nombre en cada subida: renombrar un programa no renombra la carpeta (puede compartirla con
 programas de otros clientes que se llamen igual); lo que se suba después va al nombre nuevo.
 
@@ -283,6 +323,7 @@ Prefijo de URL: **`/client-area/`**
 | `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Parcial de la tabla |
 | `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | La celda (errores en la celda, 200), o la tabla (`HX-Retarget`) tras cambiar la fecha |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Parcial de la tabla |
+| `records/measurement/chart/` (GET) | `client_area_measurement_chart` | JSON `{"series": [{"name", "data": [[fecha, valor], ...]}]}` de la gráfica de Evolución |
 | `program/entries/add/` | `client_area_add_program_entry` | Parcial de la tabla del programa (fila nueva) |
 | `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` o `board_item`): parcial de la tabla del programa; toast 422 si no es válido, 404 si el hueco no existe |
 | `program/files/<id>/delete/` · `program/entries/<id>/delete/` | `client_area_delete_program_file`, `client_area_delete_program_entry` | Parcial de la tabla del programa |
@@ -292,11 +333,10 @@ Prefijo de URL: **`/client-area/`**
 | `academy/programs/add/` | `client_area_add_training_program` | Sección de academia con el programa nuevo abierto; toast 422 si el nombre no es válido |
 | `academy/programs/<id>/` (GET) | `client_area_training_program` | Sección de academia con el programa abierto |
 | `academy/programs/<id>/rename/` · `delete/` | `client_area_rename_training_program`, `client_area_delete_training_program` | Sección de academia (abierto / carpetas) |
-| `academy/programs/<id>/save-template/` | `client_area_save_training_program_template` | Sección de academia, programa abierto |
 | `academy/programs/<id>/lessons/add/` | `client_area_add_lesson` | GET: formulario para el modal; POST: tabla de lecciones, o el formulario con errores |
 | `academy/lessons/<id>/availability/` | `client_area_set_lesson_availability` | Tabla de lecciones; toast 422 si el dato no es válido |
 | `academy/lessons/<id>/delete/` | `client_area_delete_lesson` | Tabla de lecciones |
-| `academy/plans/reuse/` · `copy/` | `client_area_reuse_academy_plan`, `client_area_copy_academy` | Sección de academia (el programa nuevo abierto / carpetas) |
+| `academy/templates/add/` · `copy/` | `client_area_add_academy_template`, `client_area_copy_academy` | Sección de academia (el programa nuevo abierto / carpetas); toast 422 si la plantilla ya está en la academia del cliente |
 | `program/activate/` · `program/deactivate/` | `client_area_activate_program`, `client_area_deactivate_program` | Parcial de herramientas; si el periodo no es válido se vuelve a pintar `#caProgressSection` |
 | `access-requests/` | `client_area_access_requests` | Parcial con la lista completa para el modal "Ver todas" del home |
 | `access-requests/<id>/accept/` | `client_area_accept_access` | GET: formulario de aceptar (`?scope=pane\|home\|modal`). POST: parcial de herramientas (panel) o bloque del home + lista del modal (OOB); `showToast`. Periodo no válido: se vuelve a pintar el formulario con 200 |
@@ -330,9 +370,10 @@ Prefijo de URL: **`/client-area/`**
   arriba), activar/desactivar el acceso, enlace
   de WhatsApp y badges de App Store / Play Store (provisionales).
 - **Evolución / Fotos** — con scroll horizontal y edición en la propia tabla (ver *Tablas Evolución
-  / Fotos*). Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Fam Fit la sigue
+  / Fotos*); Evolución tiene además su gráfica con rango Desde / Hasta. Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Fam Fit la sigue
   devolviendo.
-- **Productos nutricionales** — Fecha, Productos, Observaciones, editados en la propia tabla como
+- **Productos nutricionales** — Productos y Explicación (el campo `observations`, la columna más
+  ancha, `.ca-col-wide`), editados en la propia tabla como
   Evolución (ver *Tablas Evolución / Fotos*). Borrar elimina la fila. La API lee los productos en
   directo, sin caché.
 - **Programa** — `client-area-program-table.html` (`#caProgramTable`, se sustituye con `outerHTML`):
@@ -352,22 +393,23 @@ Prefijo de URL: **`/client-area/`**
     usan modal.
 - **Academia** — interruptor No/Sí que se guarda al cambiarlo. Cerrada: una carpeta por programa
   formativo (nombre y número de contenidos), un campo "Nuevo programa formativo" y el desplegable
-  **Plantillas** ("Añadir desde plantilla" y "Copiar de otro cliente", con `hx-confirm`). Abierta:
-  botón de volver, renombrar en línea, borrar (`hx-confirm`), la tabla de elementos, **Añadir
-  contenido** y **Guardar como plantilla**. **Añadir contenido** abre `ClientLessonForm`, de una
-  columna y por secciones:
+  **Plantillas** ("Añadir desde plantilla", con las plantillas de Videoteca que este cliente aún no
+  tiene, y "Copiar de otro cliente", con `hx-confirm`); un programa de plantilla lleva un icono de
+  colección. Abierta: botón de volver, renombrar en línea, borrar (`hx-confirm`), la tabla de
+  elementos y **Añadir contenido**. Los elementos de plantilla muestran el título o el texto de su
+  contenido con un icono de colección; su disponibilidad y su borrado solo afectan a este cliente.
+  **Añadir contenido** abre `ClientLessonForm`, de una columna y por secciones:
 
   | Sección | Campos |
   |---|---|
   | Disponibilidad | `widgets.AvailabilityWidget`: casilla "Siempre" con el campo "Día" a su derecha (se envían como `unlock_day_always` / `unlock_day`). Marcar Siempre desactiva el día (`client_area_tools.js`); `AvailabilityField` exige un día ≥ 1 salvo con Siempre |
-  | Contenido | `widgets.SegmentedRadioSelect` `content_source`: Subir vídeo (`video_file`) / YouTube (`youtube_url`, validado con `extract_youtube_video_id`) / Desde board (`board_items`, varios) |
+  | Contenido | `youtube_url`, validado con `extract_youtube_video_id`. Los vídeos solo son enlaces de YouTube: no se suben vídeos |
   | Texto | `text` |
   | Adjuntar archivo (PDF, imagen) | `attachment_source`: Subir archivo (`attachment_file`) / Desde board (`attachment_item`, PDF o imagen) |
 
   Los campos con `data-ca-when="<origen>=<valor>"` solo se ven con esa opción marcada; `clean()`
-  descarta los de las opciones no marcadas y exige algún contenido. `add_lessons` crea un elemento
-  por cada contenido (la subida, el YouTube o cada elemento elegido), todos con el texto y el
-  adjunto; si solo hay texto o adjunto, uno solo. Cada fila tiene el mismo widget de disponibilidad,
+  descarta el de la opción no marcada y exige algún contenido. `add_lessons` crea un elemento con el
+  enlace, el texto y el adjunto. Cada fila tiene el mismo widget de disponibilidad,
   que se guarda al cambiarlo (al marcar Siempre o al escribir un día), y un botón de borrar con
   `hx-confirm`.
 - **Progreso** — `ProgramPeriodForm` (fecha de inicio y duración; la fecha de fin la calcula
@@ -409,8 +451,28 @@ del contacto, qué pide (acceso, o continuar el programa con el número de pedid
 | `0016_clientprofile_time_zone` | Añade `ClientProfile.time_zone` |
 | `0017_client_body_composition` | Añade `ClientProfile.sex` / `height_cm` / `neck_cm` / `activity_level` y `ClientMeasurement.body_fat_pct` / `muscle_mass_kg`. Datos: un `bioimpedance.body_fat_pct` (2–75) / `muscle_mass_kg` (10–150) numérico se copia a su campo |
 | `0018_remove_clientprofile_neck_cm` | Elimina `ClientProfile.neck_cm` (el % de grasa ya no se calcula) |
+| `0019_academy_templates` | Añade `TrainingProgram.template_folder` y `ClientLesson.template_item` / `hidden_by_advisor`; `ClientLesson.unlock_day` pasa a admitir vacío (necesita la `0013` de `boards`) |
+| `0020_academy_plans_to_videoteca` | Datos (modelos históricos), ver abajo |
+| `0021_remove_academy_plans` | Elimina `ClientLesson.source_item`, `TrainingProgram.source_plan`, `AcademyPlanItem` y `AcademyPlan`; añade las restricciones únicas de plantillas |
 
-Los `AcademyPlanItem` guardados desde asignaciones en modo "all" conservan el día que tenían. El
+La `0020` convierte las plantillas antiguas en plantillas de Videoteca:
+
+1. Las subcarpetas que ya había en Videoteca guardaban lo subido desde el panel para cada cliente, no
+   plantillas: pasan a Otros (la carpeta del catálogo o la carpeta sombra del asesor, que se crea si
+   falta) con sus elementos.
+2. Cada `AcademyPlan` pasa a ser una carpeta con su nombre y la fecha de su `updated_at`: en la
+   Videoteca del catálogo si es de `USER_ROOT` y, si no, en la Videoteca propia del asesor (se crea su
+   board si falta). Cada `AcademyPlanItem` pasa a ser un contenido de academia con su `unlock_day` y
+   su `order`: un YouTube da el enlace, un texto se suma al texto del elemento y un PDF / imagen /
+   vídeo subido pasa a ser el adjunto si no había otro. Los archivos se comparten por ruta, no se copian.
+3. Cada programa con `source_plan` apunta a su carpeta; una segunda copia de la misma plantilla en el
+   mismo cliente se queda como programa propio. Sus lecciones de la plantilla pasan a ser elementos
+   de plantilla que solo guardan la disponibilidad si es distinta de la de la plantilla; los elementos
+   que el cliente ya no tenía se añaden ocultos. Los elementos propios no se tocan.
+
+Sin catálogo no hace nada. Al revertir, los elementos de plantilla pasan a ser elementos propios de
+su contenido de academia (los ocultos se borran); las plantillas antiguas no se reconstruyen. Los
+`AcademyPlanItem` guardados desde asignaciones en modo "all" conservaron el día que tenían (`0005`). El
 contenido propio de las lecciones en los campos que borra `0011` (URL de vídeo, vídeo, adjunto) no se
 convierte en elementos del board.
 

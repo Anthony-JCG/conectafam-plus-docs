@@ -26,7 +26,7 @@ Relationship to the core apps:
 |---|---|
 | `Board` | User container: title, cover image, order, `share_token`, `allow_duplicate_on_share`, `is_public`, `is_client_area`. FK → `users.User` |
 | `BoardFolder` | Nestable folders (`parent` FK → self), sortable in the mosaic. Optional `catalog_folder` FK → `BoardFolder` for client-area shadow folders |
-| `BoardItem` | Mosaic element. Types: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`. Files up to 10 MB. Optional FK → `landing.LandingPage` |
+| `BoardItem` | Mosaic element. Types: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`, `academy` (client-area Videoteca only, see below). Files up to 10 MB. Optional FK → `landing.LandingPage`; `unlock_day` (academy availability, `0` = siempre) |
 | `BoardCollaborator` | Invited user. PRO+ collaborators have read+edit access; Basic collaborators are view-only. Unique on `(board, user)` |
 | `BoardLibraryEntry` | Reference to a shared board saved into the user's own library (read-only) |
 | `BoardDeleteLog` | Append-only log of permanently deleted boards. `board_id` / `user_id` are plain integers because the `Board` row is already gone. Consumed **only** by the keyboard API delta-sync endpoint so mobile clients know what to purge |
@@ -37,8 +37,8 @@ Two boards carry `is_client_area=True`; an advisor only ever sees **one**, "Áre
 
 | Board | Owner | Allowed item types | Created by |
 |---|---|---|---|
-| System catalog (`CLIENT_AREA_CATALOG_TITLE`, folders Nutrición / Deporte / Videoteca / Otros) | FAM TEAM / `USER_ROOT` | PDF, image (`CLIENT_AREA_CATALOG_ITEM_TYPES`); Videoteca also uploaded video and YouTube (`CLIENT_AREA_CATALOG_FOLDER_EXTRA_ITEM_TYPES`) | Migrations `0009` / `0010`; `manage.py seed_client_area_board` (idempotent) |
-| Own client-area board ("Área de clientes", `CLIENT_AREA_OWN_BOARD_TITLE`) | Each entitled advisor, private | Folders, text, image, PDF, uploaded video, YouTube (`CLIENT_AREA_OWN_ITEM_TYPES`) | `client_area_catalog.ensure_user_client_area_board` on first use (boards home, client-area pane) |
+| System catalog (`CLIENT_AREA_CATALOG_TITLE`, folders Nutrición / Deporte / Videoteca / Otros) | FAM TEAM / `USER_ROOT` | PDF, image (`CLIENT_AREA_CATALOG_ITEM_TYPES`); Videoteca: templates only (see [Videoteca templates](#videoteca-templates)); no uploaded video | Migrations `0009` / `0010`; `manage.py seed_client_area_board` (idempotent) |
+| Own client-area board ("Área de clientes", `CLIENT_AREA_OWN_BOARD_TITLE`) | Each entitled advisor, private | Folders, text, image, PDF, YouTube (`CLIENT_AREA_OWN_ITEM_TYPES`) | `client_area_catalog.ensure_user_client_area_board` on first use (boards home, client-area pane) |
 
 Only `USER_ROOT` edits the catalog, and `USER_ROOT` sees nothing else. Advisors manage their own
 board with the regular board views.
@@ -82,11 +82,34 @@ them (or their subfolders).
   folder.
 - The allowed item types depend on the folder: `client_area_root_folder(folder)` walks up to the
   root folder (a shadow folder maps to its catalog folder) and `client_area_item_types(board,
-  folder)` adds its `CLIENT_AREA_CATALOG_FOLDER_EXTRA_ITEM_TYPES`. `item-modal.js` sends
-  `folder_id` to `load_board_item_form` so the type menu matches the folder.
+  folder)` applies the Videoteca rules below. `item-modal.js` sends `folder_id` to
+  `load_board_item_form` so the type menu matches the folder.
 
 Own top-level folders created before this rule are no longer valid; migration `0012` moves loose
 root content into Otros.
+
+#### Videoteca templates
+
+Videoteca only holds **academy templates** (used by `client_area`, see its README):
+
+| Videoteca level | Can be created there |
+|---|---|
+| Its root (catalog folder or the advisor's shadow folder) | Folders only: each one is a template |
+| A template of this board | **Contenido de academia** items only (`BOARD_ITEM_TYPE_ACADEMY`, `CLIENT_AREA_ACADEMY_ITEM_TYPES`) |
+| A system template seen from an advisor's board, or deeper | Nothing |
+
+- `is_videoteca_folder` / `is_academy_template_folder` identify the levels; `client_area_folder_locked`
+  makes `save_board_folder` answer 403 inside a template, and `build_board_detail_context` exposes
+  `can_add_folder` so `board-detail.html` hides "Carpeta" there.
+- An academy content has availability (`unlock_day`: Siempre / Día N), a YouTube link (`url`), a text
+  (`text_content`) and a PDF / image attachment (`file`); some content is required. The modal uses
+  `client_area.forms.AcademyContentForm` (`forms.board_item_form_class`); `item-modal.js` disables the
+  day while "Siempre" is checked. Its title is the YouTube title when left empty, and its tile shows
+  the YouTube thumbnail (`mosaic.js` icon `bi-mortarboard` otherwise); `item-viewer.js` shows the
+  player, the text and the attachment link.
+- `build_view_mosaic_tiles` lists Videoteca folders newest first (system and own templates together,
+  by `created_at`).
+- Moving items into or out of a template is not restricted by type.
 
 #### Shadow folders
 
@@ -126,8 +149,9 @@ All in `services/board_permissions.py`; entitlement is `user_levels`
 | `user_can_edit_board` | Owner only: `USER_ROOT` for the catalog, the entitled advisor for their own board |
 | `user_may_write_board_content` | Skips the plan write routes for client-area boards; `RouteLevelAccessMiddleware` (`CLIENT_AREA_BOARD_WRITE_ROUTES`) lets a Basic user with the add-on use them on their own board only |
 | `get_client_area_catalog_boards_queryset(user)` | System catalog first, then the own board. Used by the search index and the client-area picker search and forms |
-| `client_area_item_types(board, folder)` / `board_allows_item_type` / `require_client_area_item_type` | Allowed types per board and root folder (Videoteca adds video and YouTube); also drive the "Añadir" menu (`client_area_add_menu(board, folder)`) and `load_board_item_form` |
+| `client_area_item_types(board, folder)` / `board_allows_item_type` / `require_client_area_item_type` | Allowed types per board and folder (Videoteca: academy contents inside an own template only); also drive the "Añadir" menu (`client_area_add_menu(board, folder)`), `load_board_item_form` and `save_item`, on create only: older items of another type stay editable |
 | `client_area_root_locked(board, folder)` | `True` at the root of a client-area board: no folder or item can be created or moved there |
+| `client_area_folder_locked(board, folder)` | Root lock, plus inside a Videoteca template: no folder can be created there |
 
 The owner settings form exposes only title, description and cover; client-area boards cannot be
 deleted from the UI (`delete_board` / `save_board` skip them). The flag also excludes them from
@@ -142,6 +166,7 @@ excess-object counts.
 | `0010_set_client_area_catalog_cover` | Sets the default cover (`static/img/min_board.jpg`, stored as-is, no WebP) when the catalog has none |
 | `0011_boardfolder_catalog_folder` | Adds `BoardFolder.catalog_folder` (shadow folders) |
 | `0012_client_area_root_folders_only` | Data: creates any missing catalog root folder (Nutrición / Deporte / Videoteca / Otros) and moves folders and items at the root of a client-area board into Otros (the catalog's own folder, or the advisor's shadow folder of it) |
+| `0013_boarditem_academy` | Adds `BoardItem.unlock_day` and the `academy` item type |
 
 `0009`, `0010` and `0012` only use historical models (`apps.get_model`), so `0011` and later schema changes
 apply cleanly after them on a fresh database. Both skip with a warning when `USER_ROOT` (or the
@@ -254,7 +279,7 @@ wired through `htmx_modal_*` kwargs on `base-modal.html`. Field HTML is fetched 
 `item_type` plus a sentinel id so the loader issues a GET instead of restoring the empty template).
 `BoardItemForm` shapes visible fields and `accept` per type; PDF editing prefers the stored
 `mosaic_preview`. After settle, the `boards:item-form-loaded` event lets `item-modal.js` bind only
-domain UX — YouTube/link blur previews, PDF filename helper, voice recorder. File previews come from
+domain UX — YouTube/link blur previews, PDF filename helper, voice recorder, academy availability. File previews come from
 `fileUploadUtils.initPreviewsInScope`, not reimplemented here.
 
 Modular JS in `static/js/`: `api`, `mosaic`, `item-modal`, `item-viewer`, `board-detail`,

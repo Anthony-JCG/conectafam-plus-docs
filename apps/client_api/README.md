@@ -123,7 +123,7 @@ zone (`settings.TIME_ZONE`) is used.
 | GET | `/photos/` | token | Progress photo history |
 | POST | `/photos/` | token + active | Save the day's photos, multipart front/back/side (upsert per date) |
 | GET | `/program/` | token + active | Latest file per slot (nutrition/sport/other) + products |
-| GET | `/products/` | token | Products of the active program |
+| GET | `/products/` | token | Products of the running program (active or scheduled) |
 | GET | `/products/<id>/` | token | Product detail (popup) |
 | GET | `/academy/` | token + active | Programas formativos with their lessons (per-lesson availability) + `todays_lesson` |
 | GET | `/academy/lessons/<id>/` | token + active | Lesson detail if unlocked |
@@ -139,8 +139,9 @@ Unexpected errors return **500** `{"error": "Internal server error."}` on every 
 
 `program` in `/me/`, `/home/` and `/program/` describes the active assignment, or is `null` when
 there is none. `/me/` and `/home/` also return a program **scheduled** to start later (a first
-program or a renewal) so the app can show "Tu programa inicia {start_date}"; `/program/` and
-`/academy/` wait for the start date.
+program or a renewal) so the app can show "Tu programa inicia {start_date}". `/program/` and
+`/products/` also return it with its files and products (and every other endpoint works); only
+`/academy/` (Tu día) waits for the start date and answers `academy_enabled: false` until then.
 
 ```json
 {
@@ -196,11 +197,11 @@ the next request; a row the advisor added but has not named yet is left out of t
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | int | |
+| `id` | int | Stable while the client has the element (a template element keeps its id) |
 | `program_id` | int | Id of its programa formativo (`programs[].id` in `/academy/`) |
-| `title` | string | Board item title, else the first 80 chars of the text, else the attachment title, else `Lesson <id>` |
-| `unlock_day` | int | `0` = always available ("Siempre"); `N >= 1` = available from program day `N` ("Día N") |
-| `order` | int | Display order inside its program; sort by it |
+| `title` | string | Title of the content (template academy content or board item), else the first 80 chars of the text, else the attachment title, else `Lesson <id>` |
+| `unlock_day` | int | `0` = always available ("Siempre"); `N >= 1` = available from program day `N` ("Día N"). Effective value: the client's own day, else the template's |
+| `order` | int | 1-based position inside its program (template elements first, in the template's order, then the advisor's own ones); sort by it |
 | `unlocked` | bool | `unlock_day == 0`, `program_day >= unlock_day`, or a day already reached in a previous period (a renewal restarts `program_day` but keeps what was unlocked) |
 | `thumbnail_url` | string \| null | Absolute preview of the content board item, the image the board shows: YouTube `hqdefault` thumbnail, `mosaic_preview` of PDFs / images / pages. `null` when the board has none (uploaded videos, text, PDFs whose preview could not be generated). Sent for locked lessons too |
 | `video_url` | string | YouTube URL (`""` otherwise or while locked) |
@@ -220,6 +221,12 @@ of its type when it is still empty:
 | Uploaded video | `video_file_url` |
 | Text | `text` |
 | PDF, image | `attachment_url` |
+
+Lessons of a **template program** (the advisor assigned a Videoteca template) read the template's
+academy content live: `video_url` is its YouTube link, `text` its text and `attachment_url` its
+attachment; `video_file_url` is always `""` for them. Contents added to the template show up as new
+lessons (new ids) on the next request; a content removed from the template, or hidden for this
+client, is no longer listed and its detail answers `404`.
 
 ---
 
@@ -263,8 +270,6 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
     "leg": null,
     "body_fat_pct": 20.0,
     "muscle_mass_kg": 31.0,
-    "muscle_mass_pct": 43.1,
-    "muscle_mass_source": "user",
     "daily_kcal": 2150,
     "daily_kcal_source": "calc",
     "bmi": 23.5,
@@ -288,7 +293,7 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
 "Mi perfil", asked on first launch (Guardar / Más tarde) and editable later. Token only.
 
 - **GET** → **200** the values, `missing` (the empty ones, in this order: `sex`, `birth_date`,
-  `height_cm`, `activity_level`; all of them feed the muscle mass and kcal formulas), `profile_complete` and `activity_levels` (choices to
+  `height_cm`, `activity_level`; all of them feed the kcal formula), `profile_complete` and `activity_levels` (choices to
   render, Spanish label and description).
 - **PATCH** JSON, any subset; `null` clears a value → **200** same body. **400** `{"error": ...}`
   for a value out of range.
@@ -332,7 +337,7 @@ updates it instead of adding a row.
 - **GET** → **200** `{"measurements": [Measurement, ...]}`, newest first.
   `?recorded_on=YYYY-MM-DD` returns only that day (`[]` or one row) to preload the form.
 - **POST** JSON upsert of `recorded_on`: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`,
-  the optional user values `body_fat_pct` (2–75, never calculated) and `muscle_mass_kg` (10–150; it replaces
+  the optional user values `body_fat_pct` (2–75, never calculated) and `muscle_mass_kg` (10–150, never calculated; it replaces
   `bioimpedance.muscle_mass_kg`), and `bioimpedance` (free-form extra readings). Only the keys sent change; `null` clears a value; `bioimpedance` is replaced
   whole. `recorded_on` may be at most the client's tomorrow (slack for a stale zone).
   - **201** `{"measurement": {...}, "created": true}` the first save of the day (`source=client`;
@@ -348,32 +353,30 @@ Second save of the day (`chest` was saved earlier and stays):
 ```
 
 ```json
-{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "muscle_mass_pct": null, "muscle_mass_source": null, "daily_kcal": null, "daily_kcal_source": null, "bmi": null, "bmi_category": null, "bmi_category_label": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
+{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": null, "daily_kcal_source": null, "bmi": null, "bmi_category": null, "bmi_category_label": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
 ```
 
 #### Body composition
 
 Every measurement row (list, POST response, `/home/` `current`) has `body_fat_pct`,
-`muscle_mass_kg` + `muscle_mass_pct` + `muscle_mass_source`, `daily_kcal` + `daily_kcal_source` and
-`bmi` + `bmi_category` + `bmi_category_label`.
+`muscle_mass_kg`, `daily_kcal` + `daily_kcal_source` and `bmi` + `bmi_category` +
+`bmi_category_label`.
 
-- `body_fat_pct` is only the value the client entered (`null` otherwise); it is never calculated.
-- A source is `user` exactly when the value is stored on the row (entered by the client, always
-  wins), `calc` (calculated) or `null` with the value when an input is missing (never guessed).
+- `body_fat_pct` and `muscle_mass_kg` are only the values the client entered (`null` otherwise);
+  they are never calculated.
+- `daily_kcal_source` is `calc`, or `null` with the value when an input is missing (never guessed).
 - `bmi` is always calculated and never stored or accepted on POST.
 
 Calculated with `/profile/` and the row (`client_area.services.body`):
 
 | Value | Formula | Inputs |
 |---|---|---|
-| `muscle_mass_kg` | Skeletal muscle, Lee et al. 2000 (Am J Clin Nutr) anthropometric model `0.244·weight + 7.8·height_m + 6.6·sex − 0.098·age − 3.3` (sex 1 male / 0 female, race term 0) | row `weight`, age on the row's date, profile `height_cm`, `sex` |
-| `muscle_mass_pct` | `muscle_mass_kg / weight × 100` (user or calc kg) | row `weight` |
 | `daily_kcal` | Mifflin-St Jeor BMR (male `10W + 6.25H − 5A + 5`, female `… − 161`) × activity multiplier, rounded | row `weight`, age on the row's date, profile `height_cm`, `sex`, `activity_level` |
 | `bmi` | `weight / height_m²`, 1 decimal | row `weight`, profile `height_cm` |
 | `bmi_category` / `bmi_category_label` | From the rounded `bmi`: `< 18.5` `underweight` "Bajo peso", `< 25` `normal` "Peso normal", `< 30` `overweight` "Sobrepeso", else `obese` "Obesidad" | `bmi` |
 
 ```json
-{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "chest": null, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": 33.3, "muscle_mass_pct": 41.6, "muscle_mass_source": "calc", "daily_kcal": 2712, "daily_kcal_source": "calc", "bmi": 24.7, "bmi_category": "normal", "bmi_category_label": "Peso normal", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
+{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "chest": null, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": 2712, "daily_kcal_source": "calc", "bmi": 24.7, "bmi_category": "normal", "bmi_category_label": "Peso normal", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
 ```
 
 ### GET · POST /photos/
@@ -406,7 +409,7 @@ Every program file is a board item of the advisor's client-area board (uploads a
 in Nutrición / Deporte / Otros): `title` is the item title, `file_url` its file or URL and
 `thumbnail_url` the absolute preview the web grid shows (`mosaic_preview` of a PDF or image, YouTube
 thumbnail), or `null` when the board has none (e.g. a PDF whose first page could not be rendered).
-Without an active program: `program: null`, empty slots and `products: []`.
+Without a running program (active or scheduled): `program: null`, empty slots and `products: []`.
 
 The advisor's Programa table has dated rows with one cell per slot; the client always follows the
 **latest file of each slot**. Each `files.<slot>` list therefore holds at most one file: the newest
@@ -418,7 +421,7 @@ the advisor's pane sets to the local date whenever a cell is filled; `id` is the
 
 | Status | Body |
 |---|---|
-| `200` | `{"products": [Product, ...]}`, newest `recorded_on` first (active program only; `[]` without one) |
+| `200` | `{"products": [Product, ...]}`, newest `recorded_on` first (running program, active or scheduled; `[]` without one) |
 | `200` | `{"product": Product}` for `/products/<id>/` (any product of this client) |
 | `404` | `{"error": "Product not found."}`: unknown, another client's, or deleted by the advisor |
 
@@ -452,7 +455,7 @@ the advisor's pane sets to the local date whenever a cell is filled; `id` is the
 
 | Field | Notes |
 |---|---|
-| `academy_enabled` | Advisor's No/Sí toggle; `false` also without an active program |
+| `academy_enabled` | Advisor's No/Sí toggle; `false` also without an active program (so while scheduled) |
 | `program_day` | 1-based program day, `null` without a start date |
 | `todays_lesson` | Detail of the first lesson (programs, then lessons, in order) whose `unlock_day` equals `program_day`, or `null`. `unlock_day: 0` lessons are never `todays_lesson` |
 | `programs` | Programas formativos (the Academia folders), sorted by `order`: `id`, `name`, `order` and `lessons` (Lesson list with thumbnail and video keys, without `text` / `attachment_url`, sorted by `order`). Each lesson carries its own `unlock_day`; both kinds may be mixed |
@@ -464,6 +467,10 @@ come grouped in `programs[].lessons`, and every lesson (list, `todays_lesson` an
 `program_id`. `unlock_day`, `unlocked`, `todays_lesson` and the detail keys are unchanged; the
 lesson `title` no longer falls back to a video URL (content always comes from a board item).
 
+**Contract change (academy templates).** No key was added or removed. `order` is now the lesson's
+1-based position in its program (it used to be a stored value with possible gaps); sorting by it
+keeps working. `unlock_day` is always the effective day of the lesson for this client.
+
 ### GET /academy/lessons/<id>/
 
 | Status | Body |
@@ -472,7 +479,7 @@ lesson `title` no longer falls back to a video URL (content always comes from a 
 | `403` | `{"error": "Lesson is locked.", "unlock_day": 20, "unlocked": false}` |
 | `403` | `{"error": "Academy is not enabled."}` |
 | `403` | `{"error": "Access is not active.", "access_status": "..."}` |
-| `404` | `{"error": "Lesson not found."}` |
+| `404` | `{"error": "Lesson not found."}`: unknown, another client's, hidden by the advisor or no longer in its template |
 
 ### POST /continuity/
 

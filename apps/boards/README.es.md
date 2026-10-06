@@ -27,7 +27,7 @@ Relación con las apps núcleo:
 |---|---|
 | `Board` | Contenedor del usuario: título, imagen de portada, orden, `share_token`, `allow_duplicate_on_share`, `is_public`, `is_client_area`. FK → `users.User` |
 | `BoardFolder` | Carpetas anidables (`parent` FK → self), ordenables en el mosaico. FK opcional `catalog_folder` → `BoardFolder` para las carpetas sombra del área de clientes |
-| `BoardItem` | Elemento del mosaico. Tipos: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`. Archivos hasta 10 MB. FK opcional → `landing.LandingPage` |
+| `BoardItem` | Elemento del mosaico. Tipos: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`, `academy` (solo en la Videoteca del área de clientes, ver abajo). Archivos hasta 10 MB. FK opcional → `landing.LandingPage`; `unlock_day` (disponibilidad en la academia, `0` = siempre) |
 | `BoardCollaborator` | Usuario invitado. Los colaboradores PRO+ tienen acceso de lectura y edición; los colaboradores Basic son de solo lectura. Único en `(board, user)` |
 | `BoardLibraryEntry` | Referencia a un tablero compartido guardado en la biblioteca propia (solo lectura) |
 | `BoardDeleteLog` | Registro append-only de tableros eliminados de forma permanente. `board_id` / `user_id` son enteros simples porque la fila `Board` ya no existe. Lo consume **solo** el endpoint de delta-sync de la keyboard API para que los clientes móviles sepan qué purgar |
@@ -38,8 +38,8 @@ Hay dos boards con `is_client_area=True`, pero el asesor solo ve **uno**, "Área
 
 | Board | Dueño | Tipos permitidos | Quién lo crea |
 |---|---|---|---|
-| Catálogo de sistema (`CLIENT_AREA_CATALOG_TITLE`, carpetas Nutrición / Deporte / Videoteca / Otros) | FAM TEAM / `USER_ROOT` | PDF, imagen (`CLIENT_AREA_CATALOG_ITEM_TYPES`); Videoteca admite además vídeo subido y YouTube (`CLIENT_AREA_CATALOG_FOLDER_EXTRA_ITEM_TYPES`) | Migraciones `0009` / `0010`; `manage.py seed_client_area_board` (idempotente) |
-| Board propio del área de clientes ("Área de clientes", `CLIENT_AREA_OWN_BOARD_TITLE`) | Cada asesor con derecho, privado | Carpetas, texto, imagen, PDF, vídeo subido, YouTube (`CLIENT_AREA_OWN_ITEM_TYPES`) | `client_area_catalog.ensure_user_client_area_board` la primera vez que hace falta (home de boards, panel del área de clientes) |
+| Catálogo de sistema (`CLIENT_AREA_CATALOG_TITLE`, carpetas Nutrición / Deporte / Videoteca / Otros) | FAM TEAM / `USER_ROOT` | PDF, imagen (`CLIENT_AREA_CATALOG_ITEM_TYPES`); Videoteca: solo plantillas (ver [Plantillas de Videoteca](#plantillas-de-videoteca)); sin vídeo subido | Migraciones `0009` / `0010`; `manage.py seed_client_area_board` (idempotente) |
+| Board propio del área de clientes ("Área de clientes", `CLIENT_AREA_OWN_BOARD_TITLE`) | Cada asesor con derecho, privado | Carpetas, texto, imagen, PDF, YouTube (`CLIENT_AREA_OWN_ITEM_TYPES`) | `client_area_catalog.ensure_user_client_area_board` la primera vez que hace falta (home de boards, panel del área de clientes) |
 
 Solo `USER_ROOT` edita el catálogo, y `USER_ROOT` no ve nada más. El asesor gestiona su board con
 las vistas de boards de siempre.
@@ -83,12 +83,35 @@ de ellas (o de sus subcarpetas).
   elemento.
 - Los tipos permitidos dependen de la carpeta: `client_area_root_folder(folder)` sube hasta la
   carpeta raíz (una carpeta sombra cuenta como su carpeta del catálogo) y
-  `client_area_item_types(board, folder)` suma sus `CLIENT_AREA_CATALOG_FOLDER_EXTRA_ITEM_TYPES`.
+  `client_area_item_types(board, folder)` aplica las reglas de Videoteca de abajo.
   `item-modal.js` manda `folder_id` a `load_board_item_form` para que el menú de tipos cuadre con
   la carpeta.
 
 Las carpetas propias de primer nivel creadas antes de esta regla ya no son válidas; la migración
 `0012` mueve a Otros lo que hubiera suelto en la raíz.
+
+#### Plantillas de Videoteca
+
+Videoteca solo guarda **plantillas de academia** (las usa `client_area`, ver su README):
+
+| Nivel de Videoteca | Qué se puede crear |
+|---|---|
+| Su raíz (carpeta del catálogo o carpeta sombra del asesor) | Solo carpetas: cada una es una plantilla |
+| Una plantilla de este board | Solo **Contenido de academia** (`BOARD_ITEM_TYPE_ACADEMY`, `CLIENT_AREA_ACADEMY_ITEM_TYPES`) |
+| Una plantilla de sistema vista desde el board de un asesor, o más adentro | Nada |
+
+- `is_videoteca_folder` / `is_academy_template_folder` distinguen los niveles; con
+  `client_area_folder_locked`, `save_board_folder` responde 403 dentro de una plantilla, y
+  `build_board_detail_context` expone `can_add_folder` para que `board-detail.html` oculte "Carpeta".
+- Un contenido de academia tiene disponibilidad (`unlock_day`: Siempre / Día N), un enlace de YouTube
+  (`url`), un texto (`text_content`) y un adjunto PDF / imagen (`file`); hace falta algún contenido. El
+  modal usa `client_area.forms.AcademyContentForm` (`forms.board_item_form_class`); `item-modal.js`
+  desactiva el día mientras "Siempre" está marcado. Si el título se deja vacío se usa el del vídeo de
+  YouTube, y su ficha muestra la miniatura de YouTube (si no, el icono `bi-mortarboard` de `mosaic.js`);
+  `item-viewer.js` muestra el reproductor, el texto y el enlace al adjunto.
+- `build_view_mosaic_tiles` ordena las carpetas de Videoteca de la más nueva a la más antigua
+  (plantillas de sistema y propias juntas, por `created_at`).
+- Mover elementos a una plantilla o fuera de ella no se limita por tipo.
 
 #### Carpetas sombra
 
@@ -130,8 +153,9 @@ Todo está en `services/board_permissions.py`; el derecho sale de `user_levels`
 | `user_can_edit_board` | Solo el dueño: `USER_ROOT` en el catálogo y el asesor con derecho en el suyo |
 | `user_may_write_board_content` | No exige las rutas de escritura del plan en estos boards; `RouteLevelAccessMiddleware` (`CLIENT_AREA_BOARD_WRITE_ROUTES`) deja a un Basic con el add-on usarlas únicamente en su propio board |
 | `get_client_area_catalog_boards_queryset(user)` | Primero el catálogo y después el board propio. Lo usan el índice de búsqueda y, en el área de clientes, la búsqueda del selector y los formularios |
-| `client_area_item_types(board, folder)` / `board_allows_item_type` / `require_client_area_item_type` | Tipos permitidos por board y carpeta raíz (Videoteca suma vídeo y YouTube); también alimentan el menú "Añadir" (`client_area_add_menu(board, folder)`) y `load_board_item_form` |
+| `client_area_item_types(board, folder)` / `board_allows_item_type` / `require_client_area_item_type` | Tipos permitidos por board y carpeta (Videoteca: contenidos de academia, solo dentro de una plantilla propia); también alimentan el menú "Añadir" (`client_area_add_menu(board, folder)`), `load_board_item_form` y `save_item`, solo al crear: los elementos antiguos de otro tipo se siguen pudiendo editar |
 | `client_area_root_locked(board, folder)` | `True` en la raíz de un board del área de clientes: ahí no se crea ni se mueve ninguna carpeta o elemento |
+| `client_area_folder_locked(board, folder)` | El bloqueo de la raíz y, además, dentro de una plantilla de Videoteca: ahí no se crean carpetas |
 
 En la configuración solo se editan título, descripción y portada, y estos boards no se pueden
 borrar desde la interfaz (`delete_board` / `save_board` los descartan). El flag además los deja
@@ -146,6 +170,7 @@ el exceso de objetos de `BOARDS_MODEL_KEY`.
 | `0010_set_client_area_catalog_cover` | Pone la portada por defecto (`static/img/min_board.jpg`, tal cual, sin WebP) si el catálogo no tiene |
 | `0011_boardfolder_catalog_folder` | Añade `BoardFolder.catalog_folder` (carpetas sombra) |
 | `0012_client_area_root_folders_only` | Datos: crea las carpetas raíz del catálogo que falten (Nutrición / Deporte / Videoteca / Otros) y mueve a Otros las carpetas y elementos sueltos en la raíz de un board del área de clientes (a la carpeta del catálogo o a la carpeta sombra del asesor) |
+| `0013_boarditem_academy` | Añade `BoardItem.unlock_day` y el tipo de elemento `academy` |
 
 `0009`, `0010` y `0012` solo usan modelos históricos (`apps.get_model`), así que `0011` y los cambios de
 esquema posteriores se aplican sin problema detrás de ellas en una base de datos nueva. Las dos se
@@ -259,7 +284,7 @@ HTML de los campos lo obtiene el cargador global `static/js/htmx_modal_form.js` 
 que el loader haga un GET en lugar de restaurar la plantilla vacía). `BoardItemForm` define los
 campos visibles y el `accept` por tipo; la edición de PDF prioriza el `mosaic_preview` almacenado.
 Tras el settle, el evento `boards:item-form-loaded` permite que `item-modal.js` enlace solo la UX de
-dominio — previews al blur de YouTube/enlace, ayuda de nombre de archivo PDF, grabadora de voz. Las
+dominio — previews al blur de YouTube/enlace, ayuda de nombre de archivo PDF, grabadora de voz, disponibilidad de academia. Las
 previews de archivo vienen de `fileUploadUtils.initPreviewsInScope`, no se reimplementan aquí.
 
 JS modular en `static/js/`: `api`, `mosaic`, `item-modal`, `item-viewer`, `board-detail`,

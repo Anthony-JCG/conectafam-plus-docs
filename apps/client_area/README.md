@@ -19,7 +19,8 @@ Relationship to the core apps:
   and [Board storage](#board-storage)).
 - **`pricing`** — sells the add-on; its end pauses the advisor's programs
   (see [Add-on lapse](#add-on-lapse-programs-paused)).
-- **`users.User`** — the advisor owns `AcademyPlan`. The client is never this user.
+- **`users.User`** — the advisor (owner of the contact and of their own academy templates). The
+  client is never this user.
 
 ## Models and Data
 
@@ -30,19 +31,18 @@ Relationship to the core apps:
 | `ClientProgramEntry` | Row of the Programa table: FK → assignment (`program_entries`); `assigned_on` (defaults to `timezone.localdate`). Ordered newest first (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | One cell: FK → entry (`files`); slot `nutrition` / `sport` / `other`, unique per entry; FK → `BoardItem` (the file; uploads become board items). |
 | `ClientProduct` | FK → assignment; `recorded_on`, `products`, `observations`. Plain text, no board item. |
-| `TrainingProgram` | Programa formativo: FK → assignment (`training_programs`); optional FK → `AcademyPlan` (`source_plan`); `name`, `order`. One Academia folder. |
-| `ClientLesson` | FK → `TrainingProgram` (`lessons`); one academy element: `board_item` (the content: uploaded video, YouTube or any picked item), `text`, `attachment_item` (PDF / image board item), `unlock_day`, `order`; optional FK → `AcademyPlanItem` (`source_item`). |
-| `AcademyPlan` | FK → `users.User` (advisor). Plantilla of one programa formativo: its name and `AcademyPlanItem` rows. |
-| `AcademyPlanItem` | FK → `AcademyPlan`; `board_item`, `text`, `attachment_item`, `unlock_day`, `order`, like `ClientLesson`. |
+| `TrainingProgram` | Programa formativo: FK → assignment (`training_programs`); optional FK → `boards.BoardFolder` (`template_folder`, `SET_NULL`: the Videoteca template it reads); `name`, `order`. One Academia folder. A template is in a client's academy at most once (`training_program_assignment_template`). |
+| `ClientLesson` | FK → `TrainingProgram` (`lessons`); one academy element, ordered by `order`, `pk`. **Own element**: `board_item` (YouTube content), `text`, `attachment_item` (PDF / image board item), `unlock_day`. **Template element**: FK → `BoardItem` (`template_item`, `CASCADE`) whose content it reads; it only stores the client's overrides, `unlock_day` (`null` = the template's) and `hidden_by_advisor`. One row per program and template item (`client_lesson_program_template_item`); `available_day` is the effective day. |
 | `ClientMeasurement` | FK → profile; body metrics, the client's optional `body_fat_pct` / `muscle_mass_kg` (API only) and `bioimpedance`; `source=client\|advisor` (who created it); `hidden_by_advisor`. One row per client and date (`client_measurement_profile_day`). |
 | `ClientProgressPhoto` | FK → profile; front/back/side; `source`; `hidden_by_advisor`. One row per client and date (`client_photo_profile_day`). `save()` runs `core.utils.files.process_image_field_if_changed` on each slot like the other image models: WebP (quality 80, max 1280 px) and a replaced slot deletes its previous file (web cell and API). |
 | `ClientAccessRequest` | FK → profile; `kind` first access / continuity; optional `order_number` / `purchase_date`. |
 
-Everything except `AcademyPlan` / `AcademyPlanItem` hangs from `ClientProfile` with `CASCADE`, so
+Everything hangs from `ClientProfile` with `CASCADE`, so
 deleting the contact deletes its whole client area (see the `communication` README). FKs to
-`BoardItem` are `SET_NULL`: deleting a board item leaves the row without it. The exception is
+`BoardItem` are `SET_NULL`: deleting a board item leaves the row without it. The exceptions are
 `ClientProgramFile.board_item` (`CASCADE`): a cell always holds a file, so deleting the item empties
-the cell.
+the cell; and `ClientLesson.template_item` (`CASCADE`): deleting an academy content of a template
+removes it from every client.
 
 ### Program lifecycle
 
@@ -75,7 +75,7 @@ Scheduled and active programs are **running** (`assignment_is_running`, `assignm
   stores the day reached in the ending period (`reached_program_day`) in `unlocked_through_day`.
   `lesson_is_unlocked` opens a lesson when `unlock_day <= unlocked_through_day` or the current day
   reached it, so already unlocked lessons stay open and the rest follow the new count. It lives on
-  the client's assignment: plantillas (`AcademyPlan`) and board content are never touched.
+  the client's assignment: templates and board content are never touched.
 - **Accept a request** (`start_program_for_request`). **Aceptar** (pane) and **Admitir** (home)
   open the same inline form (`client-area-accept-request-form.html`) in a Bootstrap collapse under
   the request, with the start date and duration. Defaults: the client's today (`local_today()`) and
@@ -116,11 +116,19 @@ Never `date.today()`:
   hidden) and is not saved; a new valid date returns the whole table with `HX-Retarget` to the
   table (the rows are reordered), so it replaces the table, not the cell.
 - Photo slots show their thumbnail or a "+"; clicking either uploads (or replaces) the slot.
+- **Evolución chart** below the measurements table: one line per column (`build_measurement_chart`:
+  Peso, Pecho, Brazo, Cadera, Cintura, Pierna, named from `ClientMeasurementForm` labels; visible
+  rows only, empty cells skipped). `client_area_tools.js` fetches its JSON
+  (`client_area_measurement_chart`) and draws it with ApexCharts (CDN, loaded by `contacts.html`
+  like the home's monthly stats); Desde / Hasta only narrow the x axis. Every saved change of a
+  grid sends the `clientAreaRecordsChanged` event (`{"kind": ...}`) in `HX-Trigger`
+  (`views.RECORDS_CHANGED_EVENT`), and the chart refetches on `measurement` ones.
 - The add button and the row delete reuse `cotton/grid_add_button` and `cotton/grid_row_delete`,
   shared with the Programa table. Deleting a row only sets `hidden_by_advisor`.
 - **Productos nutricionales** use the same grid (`views.RECORD_GRIDS["product"]`, `ClientProductForm`
   with `CellFormMixin`, no one-row-per-date rule): Añadir (`add_product_row`) inserts an empty row
-  dated today on top and each cell is saved on `change`. Its delete removes the row
+  on top and each cell is saved on `change`. Its date (today) only orders the rows: the form has
+  no date field and the table no date column. Its delete removes the row
   (`client_area_delete_product`). The API skips rows whose product name is still empty.
 
 ### Programa table
@@ -144,15 +152,40 @@ lists its elements (`ClientLesson`) and manages them. Programs can be created, r
 Programs belong to the **client's assignment**, not to the advisor:
 
 - Availability is relative to each client's program day, like the lessons already were.
-- Reuse goes through **Plantillas**: `AcademyPlan` stores one programa formativo.
-  "Guardar como plantilla" (`save_program_as_plan`) saves the open program under its name and
-  replaces the items of the advisor's plan with that name; "Añadir desde plantilla"
-  (`add_program_from_plan`) adds a new program with a copy of the plan's elements
-  (`source_plan` / `source_item`) and enables the academy. "Copiar de otro cliente"
-  (`copy_academy_from_client`) replaces every program of the client with a copy of the other
-  client's programs.
-- The reusable content itself is the board: `Videoteca / <program name>` holds the uploads of
-  every client whose program has that name.
+- Reuse goes through **Plantillas** (see [Academy templates](#academy-templates)). "Copiar de otro
+  cliente" (`copy_academy_from_client`) replaces every program of the client with a copy of the
+  other client's programs (template programs keep their template and the other client's overrides).
+- **Añadir contenido** adds an own element of this client only. Its YouTube link and uploaded
+  attachment are stored in `Otros / <program name>` of the advisor's board.
+
+### Academy templates
+
+A template is a **folder right inside Videoteca** (the board, not the pane, is where templates are
+made). Each of its elements is a **Contenido de academia** board item (`academy` type, see the
+`apps/boards` README): availability (Siempre / Día N, `BoardItem.unlock_day`), a YouTube link, a
+text and a PDF / image attachment, edited with `forms.AcademyContentForm`.
+
+| Template | Where | Who can assign it |
+|---|---|---|
+| System | Folder in the catalog Videoteca (`USER_ROOT`) | Every entitled advisor |
+| Own | Folder in the advisor's shadow folder of Videoteca | Only that advisor |
+
+`services/academy.academy_template_folders(user)` lists them newest first (the board shows
+Videoteca the same way). "Añadir desde plantilla" (`add_program_from_template`) creates a program
+pointing at the folder (`template_folder`, named like it) and enables the academy; adding the same
+template twice to a client is rejected.
+
+The template is the source of truth and is read **live**:
+
+- `sync_template_lessons` gives each academy content of the folder its `ClientLesson` row (the id the
+  app uses) when the program is shown; contents added later reach clients already assigned.
+- Editing a content (text, link, attachment, default day) changes it for every client.
+- Per-client changes never touch the template: the availability is stored as an override
+  (`set_lesson_unlock_day`), and deleting a template element hides it for that client
+  (`hidden_by_advisor`). Own elements can be added to a template program as well.
+- `program_lessons(program)` / `shown_lessons` return the elements to show: template elements still in
+  the folder (in its mosaic order), then own elements. A content moved out of the folder stops
+  showing; its row keeps the client's overrides in case it comes back.
 
 ### Academy availability
 
@@ -163,9 +196,12 @@ Each `ClientLesson` has its own availability in `unlock_day` (`UNLOCK_DAY_ALWAYS
 | `0` | Siempre | Always, while the academy is enabled |
 | `N >= 1` | Día N | `program_day >= N` |
 
-`todays_lesson` is the first lesson (programs and lessons in order) whose `unlock_day` equals the
+A template element without an override uses its content's `unlock_day`; `ClientLesson.available_day`
+is the effective value used below and by the API.
+
+`todays_lesson` is the first lesson (programs and lessons in order) whose day equals the
 current program day; "Siempre" lessons never are. The assignment only keeps the No/Sí `academy_enabled` toggle; there is no academy-wide
-mode. Plans and copy-from-client keep each element's `unlock_day`.
+mode. Copy-from-client keeps each element's availability.
 
 ### Services
 
@@ -175,12 +211,12 @@ mode. Plans and copy-from-client keep each element's `unlock_day`.
 | `services/access_actions.py` | Accept requests, activate/deactivate access, grant on program start, clear on program end, continuity WhatsApp texts |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **or** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
 | `services/profiles.py` | `get_or_create_client_profile`; Fam Fit "Mi perfil" (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
-| `services/body.py` | Body composition of a measurement row: Lee 2000 skeletal muscle, Mifflin-St Jeor daily kcal, BMI and its category (body fat % is only the client's value); activity levels and value ranges |
+| `services/body.py` | Body composition of a measurement row: Mifflin-St Jeor daily kcal, BMI and its category (body fat % and muscle mass are only the client's values); activity levels and value ranges |
 | `services/programs.py` | Working assignment, `activate_program` / `deactivate_program`, `start_program_for_request`, end date, program day, progress, contact status and list filter |
 | `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, one record per date), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
-| `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `save_program_as_plan`, `add_program_from_plan`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
+| `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Advisor's client-area boards and catalog search |
-| `services/pane.py` | Tools pane context, `build_catalog_context`, WhatsApp URLs |
+| `services/pane.py` | Tools pane context, `build_catalog_context`, `build_measurement_chart` (Evolución chart series), WhatsApp URLs |
 | `services/inbox.py` | `pending_access_requests_for_advisor` (newest first, with contact, WhatsApp URL and age) for the home block; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
 | `services/expiry.py` | Hourly expiry and `pause_programs_without_entitlement` |
 
@@ -192,8 +228,8 @@ permissions and shadow folders are described in the `apps/boards` README ("Clien
 
 | Part | Owner | Allowed item types | Advisor can |
 |---|---|---|---|
-| System catalog (Nutrición, Deporte, Videoteca, Otros) | `USER_ROOT` | PDF, image; Videoteca also uploaded video and YouTube | View and pick; add own items and subfolders inside its folders (shadow folders) |
-| Own content | Advisor | Folders, text, image, PDF, uploaded video, YouTube | Full CRUD inside the catalog folders; nothing at the board root |
+| System catalog (Nutrición, Deporte, Videoteca, Otros) | `USER_ROOT` | PDF, image; Videoteca: templates only (folders, academy contents inside) | View and pick; add own items and subfolders inside its folders (shadow folders) |
+| Own content | Advisor | Folders, text, image, PDF, YouTube; Videoteca: own templates only | Full CRUD inside the catalog folders; nothing at the board root |
 
 - `services/pane.build_catalog_context` returns `catalog_board` (the own board).
   `.client-area-tools` carries its id and `board_mosaic_data` URL; the picker in
@@ -203,14 +239,16 @@ permissions and shadow folders are described in the `apps/boards` README ("Clien
   results with `textContent`.
 - `CatalogItemFormMixin` scopes its `catalog_fields` to
   `get_client_area_catalog_boards_queryset(advisor)`, so no item from another board is accepted.
-- The picker field widget is `widgets.CatalogPickerInput(multiple=...)`: an "Añadir desde board"
-  button plus the hidden ids that `client_area_tools.js` writes, keyed by the field name (several
-  pickers per form).
+- Uploaded videos (old content, videos are YouTube only) and academy contents (they live in their
+  template) are never offered: `CLIENT_AREA_PICKER_EXCLUDED_ITEM_TYPES` is excluded by the form,
+  the catalog search and the picker tiles (`client_area_tools.js`).
+- The picker field widget is `widgets.CatalogPickerInput`: an "Añadir desde board" button plus the
+  hidden id that `client_area_tools.js` writes, keyed by the field name (several pickers per form).
+  Every picker takes one item.
 
 | Tool | Picker |
 |---|---|
 | Program cell (`ProgramCellForm.board_item`, "Desde board" in the cell menu; opens the column's folder, saved on pick) | One item |
-| Academy content (`ClientLessonForm.board_items`) | Several items, one element each |
 | Academy attachment (`ClientLessonForm.attachment_item`) | One PDF or image |
 | Nutritional products | None |
 
@@ -226,10 +264,10 @@ the catalog root folder (`ensure_shadow_folder`); for `USER_ROOT`, the catalog f
 | Programa, column Alimentación (`nutrition`) | Nutrición |
 | Programa, column Deporte (`sport`) | Deporte |
 | Programa, column Otros (`other`) | Otros |
-| Academia: video, YouTube link, attachment | Videoteca / `<program name>` (subfolder created on first upload) |
+| Academia (own element): YouTube link, attachment | Otros / `<program name>` (subfolder created on first upload) |
 
-`const.PROGRAM_SLOT_FOLDERS` maps slots to folders. The Videoteca subfolder is resolved by name on
-each upload: renaming a program does not rename the folder (it may be shared with other clients'
+`const.PROGRAM_SLOT_FOLDERS` maps slots to folders. Videoteca only holds templates. The Otros
+subfolder is resolved by name on each upload: renaming a program does not rename the folder (it may be shared with other clients'
 programs of the same name); later uploads go to the new name.
 
 ## Add-on lapse: programs paused
@@ -266,6 +304,7 @@ URL prefix: **`/client-area/`**
 | `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Table partial |
 | `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | The cell (errors inline, 200), or the table (`HX-Retarget`) after a date change |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Table partial |
+| `records/measurement/chart/` (GET) | `client_area_measurement_chart` | JSON `{"series": [{"name", "data": [[date, value], ...]}]}` of the Evolución chart |
 | `program/entries/add/` | `client_area_add_program_entry` | Program table partial (new row) |
 | `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` or `board_item`): program table partial; 422 toast if invalid, 404 for an unknown slot |
 | `program/files/<id>/delete/` · `program/entries/<id>/delete/` | `client_area_delete_program_file`, `client_area_delete_program_entry` | Program table partial |
@@ -275,11 +314,10 @@ URL prefix: **`/client-area/`**
 | `academy/programs/add/` | `client_area_add_training_program` | Academy section with the new program open; 422 toast on invalid name |
 | `academy/programs/<id>/` (GET) | `client_area_training_program` | Academy section with the program open |
 | `academy/programs/<id>/rename/` · `delete/` | `client_area_rename_training_program`, `client_area_delete_training_program` | Academy section (open / folders) |
-| `academy/programs/<id>/save-template/` | `client_area_save_training_program_template` | Academy section, program open |
 | `academy/programs/<id>/lessons/add/` | `client_area_add_lesson` | GET: form for the modal; POST: lessons table, or the form with errors |
 | `academy/lessons/<id>/availability/` | `client_area_set_lesson_availability` | Lessons table; 422 toast on invalid data |
 | `academy/lessons/<id>/delete/` | `client_area_delete_lesson` | Lessons table |
-| `academy/plans/reuse/` · `copy/` | `client_area_reuse_academy_plan`, `client_area_copy_academy` | Academy section (the new program open / folders) |
+| `academy/templates/add/` · `copy/` | `client_area_add_academy_template`, `client_area_copy_academy` | Academy section (the new program open / folders); 422 toast when the template is already in the client's academy |
 | `program/activate/` · `program/deactivate/` | `client_area_activate_program`, `client_area_deactivate_program` | Tools partial; invalid period re-renders `#caProgressSection` |
 | `access-requests/` | `client_area_access_requests` | Full pending list partial for the home "Ver todas" modal |
 | `access-requests/<id>/accept/` | `client_area_accept_access` | GET: accept form (`?scope=pane\|home\|modal`). POST: tools partial (pane) or home block + modal list (OOB); `showToast`. Invalid period: form re-rendered with 200 |
@@ -310,10 +348,12 @@ URL prefix: **`/client-area/`**
 - **Access** — access code with copy, accept request (start date and duration, see above),
   activate/deactivate access, WhatsApp link,
   App Store / Play Store badges (placeholders).
-- **Evolución / Fotos** — horizontal scroll, edited inline (see *Evolución / Fotos tables*).
+- **Evolución / Fotos** — horizontal scroll, edited inline (see *Evolución / Fotos tables*);
+  Evolución also has its chart with a Desde / Hasta range.
   Deleting any row (client or advisor source) only sets `hidden_by_advisor`: the row leaves the web
   pane, the Fam Fit API still returns it.
-- **Productos nutricionales** — Fecha, Productos, Observaciones, edited inline like Evolución (see
+- **Productos nutricionales** — Productos and Explicación (the `observations` field, widest
+  column, `.ca-col-wide`), edited inline like Evolución (see
   *Evolución / Fotos tables*). Delete removes the row. The API reads products live (no cache).
 - **Programa** — `client-area-program-table.html` (`#caProgramTable`, swapped `outerHTML`):
   Fecha, Alimentación, Deporte, Otros and a row delete (`hx-confirm`). Rows come from
@@ -330,22 +370,24 @@ URL prefix: **`/client-area/`**
     `data-ca-picker-submit`, `client_area_tools.js` submits it right away.
   - **Nuevo programa** below the table adds an empty row. There is no modal for program files.
 - **Academia** — No/Sí toggle saved on change. Closed: one folder per programa formativo (name and
-  element count), a "Nuevo programa formativo" field and the **Plantillas** collapse ("Añadir desde
-  plantilla", "Copiar de otro cliente" with `hx-confirm`). Open: back button, inline rename,
-  delete (`hx-confirm`), the elements table, **Añadir contenido** and **Guardar como plantilla**.
+  element count; a template program shows a collection icon), a "Nuevo programa formativo" field
+  and the **Plantillas** collapse ("Añadir desde plantilla" with the Videoteca templates not yet in
+  this client's academy, "Copiar de otro cliente" with `hx-confirm`). Open: back button, inline
+  rename, delete (`hx-confirm`), the elements table and **Añadir contenido**. Template elements show
+  their content's title or text with a collection icon; their availability and delete only apply to
+  this client.
   **Añadir contenido** opens `ClientLessonForm`, one column, in sections:
 
   | Section | Fields |
   |---|---|
   | Disponibilidad | `widgets.AvailabilityWidget`: "Siempre" checkbox with the "Día" input to its right (posted as `unlock_day_always` / `unlock_day`). Checking Siempre disables the day (`client_area_tools.js`); `AvailabilityField` requires a day ≥ 1 unless Siempre |
-  | Contenido | `widgets.SegmentedRadioSelect` `content_source`: Subir vídeo (`video_file`) / YouTube (`youtube_url`, validated with `extract_youtube_video_id`) / Desde board (`board_items`, several) |
+  | Contenido | `youtube_url`, validated with `extract_youtube_video_id`. Videos are YouTube links only: there is no video upload |
   | Texto | `text` |
   | Adjuntar archivo (PDF, imagen) | `attachment_source`: Subir archivo (`attachment_file`) / Desde board (`attachment_item`, PDF or image) |
 
   Fields with `data-ca-when="<source>=<value>"` are shown only for the checked option; `clean()`
-  drops the inactive ones and requires some content. `add_lessons` creates one element per content
-  item (upload, YouTube or each picked item), each with the text and attachment; with text or an
-  attachment only, a single element. Each row has the same availability widget, saved on change
+  drops the inactive one and requires some content. `add_lessons` creates one element with the
+  link, the text and the attachment. Each row has the same availability widget, saved on change
   (a checked Siempre or a typed day), and an `hx-confirm` delete.
 - **Progreso** — `ProgramPeriodForm` (start date, duration; the end date is computed live by
   `client_area_tools.js` and never posted). Draft: **Activar**. Active: only **Desactivar**; the
@@ -385,8 +427,27 @@ horas"), a WhatsApp button and **Admitir**.
 | `0016_clientprofile_time_zone` | Adds `ClientProfile.time_zone` |
 | `0017_client_body_composition` | Adds `ClientProfile.sex` / `height_cm` / `neck_cm` / `activity_level` and `ClientMeasurement.body_fat_pct` / `muscle_mass_kg`. Data: a numeric `bioimpedance.body_fat_pct` (2–75) / `muscle_mass_kg` (10–150) is copied to its field |
 | `0018_remove_clientprofile_neck_cm` | Drops `ClientProfile.neck_cm` (body fat % is no longer calculated) |
+| `0019_academy_templates` | Adds `TrainingProgram.template_folder`, `ClientLesson.template_item` / `hidden_by_advisor`; `ClientLesson.unlock_day` becomes nullable (needs `boards` `0013`) |
+| `0020_academy_plans_to_videoteca` | Data (historical models), see below |
+| `0021_remove_academy_plans` | Drops `ClientLesson.source_item`, `TrainingProgram.source_plan`, `AcademyPlanItem` and `AcademyPlan`; adds the template unique constraints |
 
-`AcademyPlanItem` rows saved from "all"-mode assignments keep their previous day. Own lesson content
+`0020` turns the plantillas into Videoteca templates:
+
+1. The existing Videoteca subfolders held the pane's per-client uploads, not templates: they move to
+   Otros (the catalog folder, or the advisor's shadow folder of it, created if missing) with their items.
+2. Each `AcademyPlan` becomes a folder named like it, dated with the plan's `updated_at`: in the
+   catalog Videoteca for `USER_ROOT`, otherwise in the advisor's own Videoteca (board created if
+   missing). Each `AcademyPlanItem` becomes an academy content with its `unlock_day` and `order`: a
+   YouTube item gives the link, a text item adds its text to the plan text, a PDF / image / uploaded
+   video item becomes the attachment when there was none. Files are shared by path, not copied.
+3. Each program with `source_plan` points at its folder; a second copy of the same plan for the same
+   client stays an own program. Its lessons from the plan become template elements that only keep an
+   availability different from the template's; plan elements the client no longer had are added hidden.
+   Own elements are untouched.
+
+It does nothing without the catalog. Reverse: template elements become own elements of their academy
+content (hidden ones are deleted); the plans are not rebuilt. `AcademyPlanItem` rows saved from
+"all"-mode assignments kept their previous day (`0005`). Own lesson content
 in the fields dropped by `0011` (video URL, video file, attachment) is not converted to board items.
 
 ## Configuration and Dependencies
