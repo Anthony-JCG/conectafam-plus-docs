@@ -1,5 +1,70 @@
 # Changelog
 
+## [5.0.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.6.2...v5.0.0) (2026-10-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* muscle_mass_pct and muscle_mass_source are removed from measurement rows (measurements/ and home/ current).
+* **client_area:** muscle_mass_pct and muscle_mass_source are removed from measurement rows (measurements/ and home/ current).
+
+### Features
+
+* accept client requests with program start form ([#310](https://github.com/Anthony-JCG/conectafam-plus/issues/310)) ([5bd2f13](https://github.com/Anthony-JCG/conectafam-plus/commit/5bd2f13a4454475d3e38573a081d2a7cdcb4fa7d))
+* add advisor-owned client area content ([#307](https://github.com/Anthony-JCG/conectafam-plus/issues/307)) ([b3ff896](https://github.com/Anthony-JCG/conectafam-plus/commit/b3ff89673bfc70b986bceaa1b00002a11fbe3a5a))
+* add BMI calculation to client measurements ([#314](https://github.com/Anthony-JCG/conectafam-plus/issues/314)) ([a8a361b](https://github.com/Anthony-JCG/conectafam-plus/commit/a8a361b8a99d661fa498b43dfe7378a34a098c96))
+* add client area web tools and catalog integration ([ba7355a](https://github.com/Anthony-JCG/conectafam-plus/commit/ba7355a8047ec996423ed669c59232e6d68ccc41))
+* add client body composition data ([#312](https://github.com/Anthony-JCG/conectafam-plus/issues/312)) ([d6d8bc3](https://github.com/Anthony-JCG/conectafam-plus/commit/d6d8bc3c54cab96e9d8fd17ee47b0cddb2d0972e))
+* add client continuity request API ([#303](https://github.com/Anthony-JCG/conectafam-plus/issues/303)) ([5e07092](https://github.com/Anthony-JCG/conectafam-plus/commit/5e070926617e90d8723e39215283003c9c66ee7f))
+* add client program and academy API endpoints ([#302](https://github.com/Anthony-JCG/conectafam-plus/issues/302)) ([be9e1b4](https://github.com/Anthony-JCG/conectafam-plus/commit/be9e1b48326ed75570d023571c75842ac693a135))
+* add client progress API endpoints ([#301](https://github.com/Anthony-JCG/conectafam-plus/issues/301)) ([3e39d1c](https://github.com/Anthony-JCG/conectafam-plus/commit/3e39d1cdb877401170c6e555de7603bc4110ff47))
+* **boards:** catalog cover and lean settings ([8a74ac0](https://github.com/Anthony-JCG/conectafam-plus/commit/8a74ac0f6adc448db8b8c0d2aa262a9264dc22c2))
+* **boards:** mark client-area catalog boards ([20b5291](https://github.com/Anthony-JCG/conectafam-plus/commit/20b52911b8015aed321886da5914ac95d40af8a5))
+* **boards:** seed client-area catalog on migrate ([c546971](https://github.com/Anthony-JCG/conectafam-plus/commit/c54697140322b03f759794b400ad6ada28ed1c44))
+* **client_api:** add device token auth by access code ([#300](https://github.com/Anthony-JCG/conectafam-plus/issues/300)) ([551a7a4](https://github.com/Anthony-JCG/conectafam-plus/commit/551a7a48920445520fb03db2117c727fb846f357))
+* **client_api:** add fcm tokens and client reminders ([#304](https://github.com/Anthony-JCG/conectafam-plus/issues/304)) ([e365d20](https://github.com/Anthony-JCG/conectafam-plus/commit/e365d207c4394ed1c81d0795d5ef1493bbf0acac))
+* **client_area:** add academy section height and update modal size ([#315](https://github.com/Anthony-JCG/conectafam-plus/issues/315)) ([7432ad1](https://github.com/Anthony-JCG/conectafam-plus/commit/7432ad1e9ee56ce0eb8b511263845d0c870d1481))
+* **client_area:** add board picker with catalog search ([7eecb8e](https://github.com/Anthony-JCG/conectafam-plus/commit/7eecb8ed11f122e931d3a68bb08f07484b420fd6))
+* **client_area:** add domain models and access capability ([#296](https://github.com/Anthony-JCG/conectafam-plus/issues/296)) ([4c7a46f](https://github.com/Anthony-JCG/conectafam-plus/commit/4c7a46f16c16fb2e3c8f2b4893291ffcf3b38bff))
+* **client_area:** assign programs and access states ([a1a8e40](https://github.com/Anthony-JCG/conectafam-plus/commit/a1a8e40ee3433fa9a4aec842d18c9f7be171bb53))
+* **client_area:** auto-note program start and end ([79f9a29](https://github.com/Anthony-JCG/conectafam-plus/commit/79f9a29078ed162b0247cb6d9cf1ca5b708249f9))
+* **client_area:** expire programs on duration end ([eefa24e](https://github.com/Anthony-JCG/conectafam-plus/commit/eefa24ef8076b00edc6cef4ada928f83267eff40))
+* **client_area:** load tools pane in contact modal ([ca55f4a](https://github.com/Anthony-JCG/conectafam-plus/commit/ca55f4ae4e571f6268d80759f8535f318c3e4870))
+* **client_area:** seed fam team catalog board ([744eb60](https://github.com/Anthony-JCG/conectafam-plus/commit/744eb6070038942eed263bf9df2ec39b9911f997))
+* **client_area:** show measurement and photo tables ([402af1e](https://github.com/Anthony-JCG/conectafam-plus/commit/402af1e4fd2934505f9bc6b612d622d3dcbd19e2))
+* **client_area:** update evolution chart rendering on collapse ([#319](https://github.com/Anthony-JCG/conectafam-plus/issues/319)) ([533ae86](https://github.com/Anthony-JCG/conectafam-plus/commit/533ae86c4c908aa58be4200f9020c2a1b29fe7f9))
+* **client_area:** Videoteca templates and scheduled access ([#317](https://github.com/Anthony-JCG/conectafam-plus/issues/317)) ([34b185b](https://github.com/Anthony-JCG/conectafam-plus/commit/34b185b2e654f3d37d43ab36a1f3878605af4fe3))
+* **communication:** filter contacts by client program status ([35c22d8](https://github.com/Anthony-JCG/conectafam-plus/commit/35c22d8dedfcfd21d75a8e2eef81e22f809bed17))
+* expose lesson thumbnails and media metadata ([#309](https://github.com/Anthony-JCG/conectafam-plus/issues/309)) ([08851b2](https://github.com/Anthony-JCG/conectafam-plus/commit/08851b2e8a1b06095bf1f61e367479ebd3d67899))
+* **pricing:** add client area stripe addon entitlement ([#298](https://github.com/Anthony-JCG/conectafam-plus/issues/298)) ([0f6f4b9](https://github.com/Anthony-JCG/conectafam-plus/commit/0f6f4b99a74277fd81d44fc6dfba7200cb31e079))
+
+
+### Bug Fixes
+
+* **boards:** improve cover image loading attributes ([6ffa84d](https://github.com/Anthony-JCG/conectafam-plus/commit/6ffa84ddc9a513359046048304adbe2cfc23d748))
+* **boards:** remove username display from board tile ([ec8db3c](https://github.com/Anthony-JCG/conectafam-plus/commit/ec8db3c51d8eb6b6f90e5e6bae89dab04fa201ef))
+* client area record grid dates and date-change swap ([#316](https://github.com/Anthony-JCG/conectafam-plus/issues/316)) ([8840ea5](https://github.com/Anthony-JCG/conectafam-plus/commit/8840ea5779275a4788ced97f136efbc02a277113))
+* **keyboard_api:** exclude client-area boards from sync ([456f827](https://github.com/Anthony-JCG/conectafam-plus/commit/456f82763cb962b65a4d1bb7d3b886d2eeab015b))
+* **modal-contact:** remove pro badge from contact modal ([77f201c](https://github.com/Anthony-JCG/conectafam-plus/commit/77f201c257e412d1bca550acf8df160a847ac314))
+
+
+### Code Refactoring
+
+* add timezone-aware client records and renewals ([#311](https://github.com/Anthony-JCG/conectafam-plus/issues/311)) ([b6cd3e2](https://github.com/Anthony-JCG/conectafam-plus/commit/b6cd3e20c2b4ca02e071bcdb53dd85e8bb2e3153))
+* **client_area:** polish client area web ui ([#306](https://github.com/Anthony-JCG/conectafam-plus/issues/306)) ([2c10a8d](https://github.com/Anthony-JCG/conectafam-plus/commit/2c10a8dd9e1ca92e26b14719dcf14e6c18529330))
+* redesign client program grid ([#308](https://github.com/Anthony-JCG/conectafam-plus/issues/308)) ([19a4b79](https://github.com/Anthony-JCG/conectafam-plus/commit/19a4b797d5ef2e136de1ce27f8d1988ce232452a))
+* streamline client area grid interactions ([#313](https://github.com/Anthony-JCG/conectafam-plus/issues/313)) ([f1dc8ad](https://github.com/Anthony-JCG/conectafam-plus/commit/f1dc8ad96178945a784b9bd93879b8d553f4563a))
+
+
+### Documentation
+
+* **client_api:** update environment URLs in README files ([#305](https://github.com/Anthony-JCG/conectafam-plus/issues/305)) ([a0550f1](https://github.com/Anthony-JCG/conectafam-plus/commit/a0550f1afd8c9b82691ea9e47213e77f80caf2e4))
+
+
+### Maintenance
+
+* rename Fam Fit references to Conecta Fit ([#318](https://github.com/Anthony-JCG/conectafam-plus/issues/318)) ([15d96c1](https://github.com/Anthony-JCG/conectafam-plus/commit/15d96c1810b3adc3feba67589fcce2e37ac54883))
+
 ## [4.6.2](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.6.1...v4.6.2) (2026-09-18)
 
 
