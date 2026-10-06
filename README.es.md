@@ -124,7 +124,7 @@ en el cliente lo consume el ciclo de vida de modales en `static/js/core.js`. El 
 | [`pricing`](apps/pricing/README.es.md)             | `/pricing/`                    | No   | Suscripciones Stripe, Customer Portal, webhooks, cancelación de prueba gratuita                    |
 | [`keyboard_api`](apps/keyboard_api/README.es.md)   | `/api/keyboard/`               | n/a  | API JSON autenticada por token para el cliente del teclado móvil                                   |
 | [`client_area`](apps/client_area/README.es.md)     | `/client-area/`                | Yes  | Área de clientes del asesor: perfiles, programas, medidas, productos, academia                     |
-| [`client_api`](apps/client_api/README.es.md)       | `/api/client/`                 | n/a  | API JSON autenticada por token para la app de clientes Fam Fit                                     |
+| [`client_api`](apps/client_api/README.es.md)       | `/api/client/`                 | n/a  | API JSON autenticada por token para la app de clientes Conecta Fit                                 |
 
 Un prefijo `—` indica que la app no posee URLConf. `core` no tiene `urls.py`: sus pocas vistas se
 registran una a una en la raíz del sitio en `Platform/urls.py` (`/sw.js`, `/share-preview/`,

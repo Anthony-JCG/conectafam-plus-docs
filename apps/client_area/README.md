@@ -4,7 +4,7 @@
 
 Advisor-side **client area**: nutrition/sport programs, access codes, measurements, progress photos,
 nutritional products and the academy of each client. Consumers are `ClientProfile` rows linked to a
-`communication.Contact`, not `users.User` nodes in the sponsor tree. The Fam Fit native app reads
+`communication.Contact`, not `users.User` nodes in the sponsor tree. The Conecta Fit native app reads
 this data through [`apps/client_api`](../client_api/README.md).
 
 Relationship to the core apps:
@@ -26,7 +26,7 @@ Relationship to the core apps:
 
 | Model | Relationships and fields |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. Unique `access_code`, `access_status` (`none` / `pending` / `active` / `deactivated`), `time_zone` (device IANA zone, see [Local dates](#local-dates)). Fam Fit "Mi perfil": `sex` (`male` / `female`), `height_cm`, `activity_level` (1–5); the birth date is `contact.date_of_birth`. API only, not in the web pane. |
+| `ClientProfile` | OneToOne → `communication.Contact`. Unique `access_code`, `access_status` (`none` / `pending` / `active` / `deactivated`), `time_zone` (device IANA zone, see [Local dates](#local-dates)). Conecta Fit "Mi perfil": `sex` (`male` / `female`), `height_cm`, `activity_level` (1–5); the birth date is `contact.date_of_birth`. API only, not in the web pane. |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`, `unlocked_through_day` (program day reached in previous periods). The end date is derived (`start_date + duration_days`), never stored. Reused on every renewal. |
 | `ClientProgramEntry` | Row of the Programa table: FK → assignment (`program_entries`); `assigned_on` (defaults to `timezone.localdate`). Ordered newest first (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | One cell: FK → entry (`files`); slot `nutrition` / `sport` / `other`, unique per entry; FK → `BoardItem` (the file; uploads become board items). |
@@ -63,7 +63,7 @@ Scheduled and active programs are **running** (`assignment_is_running`, `assignm
   `activate_program` raises `ValueError`. Only **Desactivar** (or its end) stops it.
 - **Deactivate / expire.** `deactivate_program` and the hourly `expire_due_programs` (once the last
   day is over in the client's zone) set
-  `deactivated_at` and call `clear_access_on_program_end` (`access_status=none`); the next Fam Fit
+  `deactivated_at` and call `clear_access_on_program_end` (`access_status=none`); the next Conecta Fit
   login creates a new `first_access` request.
 - **Renewal keeps the data.** Tools always edit the **working assignment**
   (`get_or_create_working_assignment`): the client's latest assignment, ended or not; only a client
@@ -91,7 +91,7 @@ request by `users.middle.TimezoneFromSessionMiddleware`) and the client can be i
 Never `date.today()`:
 
 - **The client's calendar** is `ClientProfile.local_today()`, in `ClientProfile.time_zone` (sent
-  by Fam Fit in `X-Timezone`, stored by `client_api.auth.remember_client_timezone`; empty uses
+  by Conecta Fit in `X-Timezone`, stored by `client_api.auth.remember_client_timezone`; empty uses
   `TIME_ZONE`). It drives program day, days remaining, progress, scheduled / active / ended
   (`services.programs`, default `on`), unlocked lessons, the records' day (Añadir, the API
   default and its "at most tomorrow" check), the proposed start date, the hourly expiry and the
@@ -102,7 +102,7 @@ Never `date.today()`:
 ### Evolución / Fotos tables
 
 - **One row per client and date** (the whole record, not a single value), shared by the advisor
-  and the Fam Fit app. Migration `0015` merged the existing duplicates (see [Migrations](#migrations)).
+  and the Conecta Fit app. Migration `0015` merged the existing duplicates (see [Migrations](#migrations)).
 - **Añadir** (`add_record_row`) adds an empty row dated the day after the client's latest row of
   that table (rows **hidden by the advisor** included, they keep their date), or the client's today
   (`local_today()`) when there is none. It never takes a used date, so it always works.
@@ -135,7 +135,7 @@ Never `date.today()`:
 
 - Each `ClientProgramEntry` is a row (date + one cell per column); the client always gets the
   **latest file of each column**: the newest non-empty cell by row date, then row id. That is what
-  the Fam Fit `/program/` endpoint returns (see the `client_api` README).
+  the Conecta Fit `/program/` endpoint returns (see the `client_api` README).
 - **Nuevo programa** (`add_program_entry`) adds an empty row dated today.
 - `set_program_file(entry, slot, ...)` fills or replaces a cell with an upload (stored in the
   column's board folder, see [Board storage](#board-storage)) or a picked board item, and re-dates
@@ -210,10 +210,10 @@ mode. Copy-from-client keeps each element's availability.
 | `services/access.py` | Unique access-code allocation |
 | `services/access_actions.py` | Accept requests, activate/deactivate access, grant on program start, clear on program end, continuity WhatsApp texts |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **or** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
-| `services/profiles.py` | `get_or_create_client_profile`; Fam Fit "Mi perfil" (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
+| `services/profiles.py` | `get_or_create_client_profile`; Conecta Fit "Mi perfil" (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
 | `services/body.py` | Body composition of a measurement row: Mifflin-St Jeor daily kcal, BMI and its category (body fat % and muscle mass are only the client's values); activity levels and value ranges |
 | `services/programs.py` | Working assignment, `activate_program` / `deactivate_program`, `start_program_for_request`, end date, program day, progress, contact status and list filter |
-| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, one record per date), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
+| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Conecta Fit, one record per date), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Advisor's client-area boards and catalog search |
 | `services/pane.py` | Tools pane context, `build_catalog_context`, `build_measurement_chart` (Evolución chart series), WhatsApp URLs |
@@ -351,7 +351,7 @@ URL prefix: **`/client-area/`**
 - **Evolución / Fotos** — horizontal scroll, edited inline (see *Evolución / Fotos tables*);
   Evolución also has its chart with a Desde / Hasta range.
   Deleting any row (client or advisor source) only sets `hidden_by_advisor`: the row leaves the web
-  pane, the Fam Fit API still returns it.
+  pane, the Conecta Fit API still returns it.
 - **Productos nutricionales** — Productos and Explicación (the `observations` field, widest
   column, `.ca-col-wide`), edited inline like Evolución (see
   *Evolución / Fotos tables*). Delete removes the row. The API reads products live (no cache).

@@ -1,6 +1,6 @@
-# Fam Fit Client API — Technical Reference
+# Conecta Fit Client API — Technical Reference
 
-Backend JSON API for the **Fam Fit** native consumer app (client area).
+Backend JSON API for the **Conecta Fit** native consumer app (client area).
 Mount point: `/api/client/`. Mirrors `keyboard_api` patterns (device tokens,
 `JsonResponse`, csrf-exempt function views) but authenticates via
 `ClientProfile.access_code`, not `users.User` credentials.
@@ -13,8 +13,8 @@ Token audiences are isolated: `ClientDeviceToken` is never accepted by
 ## Architecture Overview
 
 ```
-Advisor (web)                 Client (Fam Fit native app)
-─────────────                 ──────────────────────────
+Advisor (web)                 Client (Conecta Fit native app)
+─────────────                 ───────────────────────────────
 users.User                    ClientProfile ↔ Contact
 Django session / CSRF         ClientDeviceToken (device_id + hex token)
 client_area HTMX pane         Authorization: Token <hex64>
@@ -498,7 +498,7 @@ advisor (ActivityContact + web push + inbox). Does **not** require active access
   "purchase_date": "2026-09-20",
   "access_status": "pending",
   "advisor_whatsapp_url": "https://wa.me/593999111222?text=...",
-  "whatsapp_message": "Hola, quiero continuar mi programa Fam Fit. Pedido: ORD-42. Fecha de compra: 2026-09-20."
+  "whatsapp_message": "Hola, quiero continuar mi programa Conecta Fit. Pedido: ORD-42. Fecha de compra: 2026-09-20."
 }
 ```
 

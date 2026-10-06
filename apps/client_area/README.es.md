@@ -5,7 +5,7 @@
 **Área de clientes** del asesor: programas de nutrición y deporte, códigos de acceso, medidas, fotos
 de evolución, productos nutricionales y academia de cada cliente. El consumidor es un
 `ClientProfile` ligado a un `communication.Contact`, no un `users.User` del árbol de patrocinio. La
-app nativa Fam Fit lee estos datos a través de [`apps/client_api`](../client_api/README.es.md).
+app nativa Conecta Fit lee estos datos a través de [`apps/client_api`](../client_api/README.es.md).
 
 Relación con las apps núcleo:
 
@@ -27,7 +27,7 @@ Relación con las apps núcleo:
 
 | Modelo | Relaciones y campos |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único, `access_status` (`none` / `pending` / `active` / `deactivated`) y `time_zone` (zona IANA del dispositivo, ver [Fechas locales](#fechas-locales)). "Mi perfil" de Fam Fit: `sex` (`male` / `female`), `height_cm`, `activity_level` (1–5); la fecha de nacimiento es `contact.date_of_birth`. Solo API, no sale en el panel web. |
+| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único, `access_status` (`none` / `pending` / `active` / `deactivated`) y `time_zone` (zona IANA del dispositivo, ver [Fechas locales](#fechas-locales)). "Mi perfil" de Conecta Fit: `sex` (`male` / `female`), `height_cm`, `activity_level` (1–5); la fecha de nacimiento es `contact.date_of_birth`. Solo API, no sale en el panel web. |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`, `unlocked_through_day` (día del programa alcanzado en periodos anteriores). La fecha de fin se calcula (`start_date + duration_days`) y no se guarda. Se reutiliza en cada renovación. |
 | `ClientProgramEntry` | Fila de la tabla Programa: FK → asignación (`program_entries`); `assigned_on` (por defecto `timezone.localdate`). Ordenadas de más nueva a más antigua (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | Una celda: FK → fila (`files`); hueco `nutrition` / `sport` / `other`, único por fila; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
@@ -66,7 +66,7 @@ Un programa programado o activo está **en curso** (`assignment_is_running`, `as
 - **Desactivar / expirar.** `deactivate_program` y la tarea horaria `expire_due_programs` (cuando
   el último día ya terminó en la zona del cliente) rellenan
   `deactivated_at` y llaman a `clear_access_on_program_end` (`access_status=none`); el siguiente
-  login en Fam Fit crea una nueva solicitud `first_access`.
+  login en Conecta Fit crea una nueva solicitud `first_access`.
 - **La renovación conserva los datos.** Las herramientas siempre editan la **asignación de trabajo**
   (`get_or_create_working_assignment`): la última del cliente, haya terminado o no; solo un cliente
   sin ninguna recibe un borrador nuevo. Volver a activar un programa terminado (desde Progreso o
@@ -95,7 +95,7 @@ activa en cada petición `users.middle.TimezoneFromSessionMiddleware`) y el clie
 zonas distintas. Nunca `date.today()`:
 
 - **El calendario del cliente** es `ClientProfile.local_today()`, en `ClientProfile.time_zone` (lo
-  manda Fam Fit en `X-Timezone` y lo guarda `client_api.auth.remember_client_timezone`; vacío usa
+  manda Conecta Fit en `X-Timezone` y lo guarda `client_api.auth.remember_client_timezone`; vacío usa
   `TIME_ZONE`). De él salen el día del programa, los días restantes, el progreso, si está
   programado / activo / terminado (`services.programs`, `on` por defecto), las lecciones
   desbloqueadas, el día de los registros (Añadir, el valor por defecto de la API y su "como mucho
@@ -108,7 +108,7 @@ zonas distintas. Nunca `date.today()`:
 ### Tablas Evolución / Fotos
 
 - **Una fila por cliente y fecha** (el registro entero, no un valor suelto), compartida por el
-  asesor y la app Fam Fit. La migración `0015` fusionó los duplicados que había (ver
+  asesor y la app Conecta Fit. La migración `0015` fusionó los duplicados que había (ver
   [Migraciones](#migraciones)).
 - **Añadir** (`add_record_row`) crea una fila vacía con el día siguiente a la última fila del
   cliente en esa tabla (también las **ocultas por el asesor**, que conservan su fecha), o con el hoy
@@ -146,7 +146,7 @@ zonas distintas. Nunca `date.today()`:
 
 - Cada `ClientProgramEntry` es una fila (fecha + una celda por columna); el cliente siempre recibe
   el **último archivo de cada columna**: la celda con archivo más reciente por fecha de fila y,
-  después, por id de fila. Es lo que devuelve el endpoint `/program/` de Fam Fit (ver el README de
+  después, por id de fila. Es lo que devuelve el endpoint `/program/` de Conecta Fit (ver el README de
   `client_api`).
 - **Nuevo programa** (`add_program_entry`) añade una fila vacía con la fecha de hoy.
 - `set_program_file(entry, slot, ...)` rellena o sustituye una celda con un archivo subido (se
@@ -226,10 +226,10 @@ modo para toda la academia. La copia desde otro cliente conserva la disponibilid
 | `services/access.py` | Asignación de códigos de acceso únicos |
 | `services/access_actions.py` | Aceptar solicitudes, activar/desactivar el acceso, darlo al iniciar el programa, quitarlo al terminar, textos de WhatsApp de continuidad |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
-| `services/profiles.py` | `get_or_create_client_profile`; "Mi perfil" de Fam Fit (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
+| `services/profiles.py` | `get_or_create_client_profile`; "Mi perfil" de Conecta Fit (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
 | `services/body.py` | Composición corporal de una fila de medidas: kcal diarias Mifflin-St Jeor, IMC y su categoría (el % de grasa y la masa muscular son solo los valores del cliente); niveles de actividad y rangos de valores |
 | `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, `start_program_for_request`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
-| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
+| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Conecta Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
 | `services/pane.py` | Contexto del panel, `build_catalog_context`, `build_measurement_chart` (series de la gráfica de Evolución), URLs de WhatsApp |
@@ -370,7 +370,7 @@ Prefijo de URL: **`/client-area/`**
   arriba), activar/desactivar el acceso, enlace
   de WhatsApp y badges de App Store / Play Store (provisionales).
 - **Evolución / Fotos** — con scroll horizontal y edición en la propia tabla (ver *Tablas Evolución
-  / Fotos*); Evolución tiene además su gráfica con rango Desde / Hasta. Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Fam Fit la sigue
+  / Fotos*); Evolución tiene además su gráfica con rango Desde / Hasta. Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Conecta Fit la sigue
   devolviendo.
 - **Productos nutricionales** — Productos y Explicación (el campo `observations`, la columna más
   ancha, `.ca-col-wide`), editados en la propia tabla como
