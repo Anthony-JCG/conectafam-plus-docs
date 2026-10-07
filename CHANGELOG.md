@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.1.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.0.0...v5.1.0) (2026-10-07)
+
+
+### Features
+
+* **client_area:** academy order, photo compare, chart dates ([#322](https://github.com/Anthony-JCG/conectafam-plus/issues/322)) ([34b3051](https://github.com/Anthony-JCG/conectafam-plus/commit/34b3051b557a8bbd854040b1507d17058be8d57d))
+
+
+### Bug Fixes
+
+* **client_area:** fit photo columns and unclip menu ([#320](https://github.com/Anthony-JCG/conectafam-plus/issues/320)) ([c1fe17a](https://github.com/Anthony-JCG/conectafam-plus/commit/c1fe17ae5967b71ee2e422950574eacccac1b30a))
+
 ## [5.0.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v4.6.2...v5.0.0) (2026-10-06)
 
 
