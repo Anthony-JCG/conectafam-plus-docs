@@ -457,8 +457,8 @@ the advisor's pane sets to the local date whenever a cell is filled; `id` is the
 |---|---|
 | `academy_enabled` | Advisor's No/Sí toggle; `false` also without an active program (so while scheduled) |
 | `program_day` | 1-based program day, `null` without a start date |
-| `todays_lesson` | Detail of the first lesson (programs, then lessons, in order) whose `unlock_day` equals `program_day`, or `null`. `unlock_day: 0` lessons are never `todays_lesson` |
-| `programs` | Programas formativos (the Academia folders), sorted by `order`: `id`, `name`, `order` and `lessons` (Lesson list with thumbnail and video keys, without `text` / `attachment_url`, sorted by `order`). Each lesson carries its own `unlock_day`; both kinds may be mixed |
+| `todays_lesson` | Detail of the first lesson (programs newest first, then lessons) whose `unlock_day` equals `program_day`, or `null`. `unlock_day: 0` lessons are never `todays_lesson` |
+| `programs` | Programas formativos (the Academia folders), **newest first** by `created_at`: `id`, `name`, `order` (still the stored create sequence, not the list order) and `lessons` (Lesson list with thumbnail and video keys, without `text` / `attachment_url`, sorted by `order`). Each lesson carries its own `unlock_day`; both kinds may be mixed |
 
 When `academy_enabled` is `false`: `programs: []`, `todays_lesson: null`.
 
@@ -470,6 +470,11 @@ lesson `title` no longer falls back to a video URL (content always comes from a 
 **Contract change (academy templates).** No key was added or removed. `order` is now the lesson's
 1-based position in its program (it used to be a stored value with possible gaps); sorting by it
 keeps working. `unlock_day` is always the effective day of the lesson for this client.
+
+**Contract change (program list order).** `programs` is listed newest → oldest by when each
+programa formativo was added (`created_at`). Keys are unchanged: each item still has `order` (the
+stored create sequence). If the app already renders the array as received, it inherits the new
+order; if it sorts by `programs[].order` ascending, it would keep the old oldest-first order.
 
 ### GET /academy/lessons/<id>/
 

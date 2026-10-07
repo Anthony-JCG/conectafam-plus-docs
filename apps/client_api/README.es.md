@@ -465,8 +465,8 @@ local cada vez que se rellena una celda; `id` es el id de la celda.
 |---|---|
 | `academy_enabled` | Interruptor No/Sí del asesor; también es `false` si no hay programa activo (así que mientras está programado) |
 | `program_day` | Día del programa empezando en 1; `null` sin fecha de inicio |
-| `todays_lesson` | Detalle de la primera lección (programas y luego lecciones, en orden) cuyo `unlock_day` coincide con `program_day`, o `null`. Las lecciones con `unlock_day: 0` nunca son `todays_lesson` |
-| `programs` | Programas formativos (las carpetas de Academia) ordenados por `order`: `id`, `name`, `order` y `lessons` (lista de Lesson con miniatura y claves de vídeo, sin `text` / `attachment_url`, ordenada por `order`). Cada lección lleva su `unlock_day` y se pueden mezclar los dos tipos |
+| `todays_lesson` | Detalle de la primera lección (programas de la más nueva a la más antigua, luego lecciones) cuyo `unlock_day` coincide con `program_day`, o `null`. Las lecciones con `unlock_day: 0` nunca son `todays_lesson` |
+| `programs` | Programas formativos (las carpetas de Academia), **de la más nueva a la más antigua** por `created_at`: `id`, `name`, `order` (sigue siendo la secuencia de alta, no el orden de la lista) y `lessons` (lista de Lesson con miniatura y claves de vídeo, sin `text` / `attachment_url`, ordenada por `order`). Cada lección lleva su `unlock_day` y se pueden mezclar los dos tipos |
 
 Con `academy_enabled` a `false`: `programs: []` y `todays_lesson: null`.
 
@@ -480,6 +480,12 @@ elemento del board).
 a ser la posición de la lección en su programa, desde 1 (antes era un valor guardado que podía tener
 huecos); ordenar por él sigue funcionando. `unlock_day` siempre es el día efectivo de la lección para
 este cliente.
+
+**Cambio de contrato (orden de la lista de programas).** `programs` va de la más nueva a la más
+antigua según cuándo se añadió cada programa formativo (`created_at`). Las claves no cambian: cada
+elemento sigue teniendo `order` (la secuencia de alta). Si la app pinta el array tal cual, hereda el
+orden nuevo; si ordena por `programs[].order` ascendente, se queda con el orden antiguo (la más
+antigua primero).
 
 ### GET /academy/lessons/<id>/
 

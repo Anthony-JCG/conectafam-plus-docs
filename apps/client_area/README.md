@@ -31,7 +31,7 @@ Relationship to the core apps:
 | `ClientProgramEntry` | Row of the Programa table: FK → assignment (`program_entries`); `assigned_on` (defaults to `timezone.localdate`). Ordered newest first (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | One cell: FK → entry (`files`); slot `nutrition` / `sport` / `other`, unique per entry; FK → `BoardItem` (the file; uploads become board items). |
 | `ClientProduct` | FK → assignment; `recorded_on`, `products`, `observations`. Plain text, no board item. |
-| `TrainingProgram` | Programa formativo: FK → assignment (`training_programs`); optional FK → `boards.BoardFolder` (`template_folder`, `SET_NULL`: the Videoteca template it reads); `name`, `order`. One Academia folder. A template is in a client's academy at most once (`training_program_assignment_template`). |
+| `TrainingProgram` | Programa formativo: FK → assignment (`training_programs`); optional FK → `boards.BoardFolder` (`template_folder`, `SET_NULL`: the Videoteca template it reads); `name`, `order` (create sequence), `created_at`. Listed newest first (`-created_at`). One Academia folder. A template is in a client's academy at most once (`training_program_assignment_template`). |
 | `ClientLesson` | FK → `TrainingProgram` (`lessons`); one academy element, ordered by `order`, `pk`. **Own element**: `board_item` (YouTube content), `text`, `attachment_item` (PDF / image board item), `unlock_day`. **Template element**: FK → `BoardItem` (`template_item`, `CASCADE`) whose content it reads; it only stores the client's overrides, `unlock_day` (`null` = the template's) and `hidden_by_advisor`. One row per program and template item (`client_lesson_program_template_item`); `available_day` is the effective day. |
 | `ClientMeasurement` | FK → profile; body metrics, the client's optional `body_fat_pct` / `muscle_mass_kg` (API only) and `bioimpedance`; `source=client\|advisor` (who created it); `hidden_by_advisor`. One row per client and date (`client_measurement_profile_day`). |
 | `ClientProgressPhoto` | FK → profile; front/back/side; `source`; `hidden_by_advisor`. One row per client and date (`client_photo_profile_day`). `save()` runs `core.utils.files.process_image_field_if_changed` on each slot like the other image models: WebP (quality 80, max 1280 px) and a replaced slot deletes its previous file (web cell and API). |
@@ -120,9 +120,14 @@ Never `date.today()`:
   Peso, Pecho, Brazo, Cadera, Cintura, Pierna, named from `ClientMeasurementForm` labels; visible
   rows only, empty cells skipped). `client_area_tools.js` fetches its JSON
   (`client_area_measurement_chart`) and draws it with ApexCharts (CDN, loaded by `contacts.html`
-  like the home's monthly stats); Desde / Hasta only narrow the x axis. Every saved change of a
+  like the home's monthly stats). Desde / Hasta are `<select>`s of the days that have a measurement
+  (`dates` in that JSON); Hasta only offers days on or after Desde. Every saved change of a
   grid sends the `clientAreaRecordsChanged` event (`{"kind": ...}`) in `HX-Trigger`
   (`views.RECORDS_CHANGED_EVENT`), and the chart refetches on `measurement` ones.
+- **Comparar fotos** under the Fotos table (same collapse pattern as the chart): the advisor picks a
+  type (Frente / Espalda / Lado) and two dates that have that slot, then opens them fullscreen side
+  by side. The catalog is JSON (`client_area_photo_compare`, `build_photo_compare`); it refreshes on
+  `photo` `clientAreaRecordsChanged` events.
 - The add button and the row delete reuse `cotton/grid_add_button` and `cotton/grid_row_delete`,
   shared with the Programa table. Deleting a row only sets `hidden_by_advisor`.
 - **Productos nutricionales** use the same grid (`views.RECORD_GRIDS["product"]`, `ClientProductForm`
@@ -144,10 +149,12 @@ Never `date.today()`:
 
 ### Academia: programas formativos
 
-Academia is a set of **programas formativos** (`TrainingProgram`), shown as folders; opening one
-lists its elements (`ClientLesson`) and manages them. Programs can be created, renamed and deleted
-(deleting removes its elements; their board items stay in the board). The No/Sí
-`academy_enabled` toggle stays on the assignment and covers every program.
+Academia is a set of **programas formativos** (`TrainingProgram`), shown as folders **newest first**
+(`created_at`, same order as `GET /academy/` `programs`); opening one lists its elements
+(`ClientLesson`) and manages them. Programs can be created, renamed and deleted (deleting removes
+its elements; their board items stay in the board). The No/Sí `academy_enabled` toggle stays on the
+assignment and covers every program. The stored `order` field is still assigned on create and sent
+in the API; it no longer drives the list order.
 
 Programs belong to the **client's assignment**, not to the advisor:
 
@@ -216,7 +223,7 @@ mode. Copy-from-client keeps each element's availability.
 | `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Conecta Fit, one record per date), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Advisor's client-area boards and catalog search |
-| `services/pane.py` | Tools pane context, `build_catalog_context`, `build_measurement_chart` (Evolución chart series), WhatsApp URLs |
+| `services/pane.py` | Tools pane context, `build_catalog_context`, `build_measurement_chart` (Evolución chart series + `dates`), `build_photo_compare`, WhatsApp URLs |
 | `services/inbox.py` | `pending_access_requests_for_advisor` (newest first, with contact, WhatsApp URL and age) for the home block; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
 | `services/expiry.py` | Hourly expiry and `pause_programs_without_entitlement` |
 
@@ -304,7 +311,8 @@ URL prefix: **`/client-area/`**
 | `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Table partial |
 | `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | The cell (errors inline, 200), or the table (`HX-Retarget`) after a date change |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Table partial |
-| `records/measurement/chart/` (GET) | `client_area_measurement_chart` | JSON `{"series": [{"name", "data": [[date, value], ...]}]}` of the Evolución chart |
+| `records/measurement/chart/` (GET) | `client_area_measurement_chart` | JSON `{"series": [{"name", "data": [[date, value], ...]}], "dates": ["YYYY-MM-DD", ...]}` of the Evolución chart |
+| `records/photo/compare/` (GET) | `client_area_photo_compare` | JSON `{"slots": [{"key", "label"}], "photos": [{"date", "front"?, "back"?, "side"?}]}` for the Fotos compare |
 | `program/entries/add/` | `client_area_add_program_entry` | Program table partial (new row) |
 | `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` or `board_item`): program table partial; 422 toast if invalid, 404 for an unknown slot |
 | `program/files/<id>/delete/` · `program/entries/<id>/delete/` | `client_area_delete_program_file`, `client_area_delete_program_entry` | Program table partial |
@@ -349,7 +357,7 @@ URL prefix: **`/client-area/`**
   activate/deactivate access, WhatsApp link,
   App Store / Play Store badges (placeholders).
 - **Evolución / Fotos** — horizontal scroll, edited inline (see *Evolución / Fotos tables*);
-  Evolución also has its chart with a Desde / Hasta range.
+  Evolución also has its chart with Desde / Hasta day selects; Fotos has **Comparar fotos**.
   Deleting any row (client or advisor source) only sets `hidden_by_advisor`: the row leaves the web
   pane, the Conecta Fit API still returns it.
 - **Productos nutricionales** — Productos and Explicación (the `observations` field, widest

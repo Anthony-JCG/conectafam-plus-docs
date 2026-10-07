@@ -32,7 +32,7 @@ Relación con las apps núcleo:
 | `ClientProgramEntry` | Fila de la tabla Programa: FK → asignación (`program_entries`); `assigned_on` (por defecto `timezone.localdate`). Ordenadas de más nueva a más antigua (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | Una celda: FK → fila (`files`); hueco `nutrition` / `sport` / `other`, único por fila; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
 | `ClientProduct` | FK → asignación; `recorded_on`, `products`, `observations`. Solo texto, sin elemento de board. |
-| `TrainingProgram` | Programa formativo: FK → asignación (`training_programs`); FK opcional → `boards.BoardFolder` (`template_folder`, `SET_NULL`: la plantilla de Videoteca que lee); `name`, `order`. Una carpeta de Academia. Una plantilla está como mucho una vez en la academia de un cliente (`training_program_assignment_template`). |
+| `TrainingProgram` | Programa formativo: FK → asignación (`training_programs`); FK opcional → `boards.BoardFolder` (`template_folder`, `SET_NULL`: la plantilla de Videoteca que lee); `name`, `order` (secuencia de alta), `created_at`. Se listan de la más nueva a la más antigua (`-created_at`). Una carpeta de Academia. Una plantilla está como mucho una vez en la academia de un cliente (`training_program_assignment_template`). |
 | `ClientLesson` | FK → `TrainingProgram` (`lessons`); un elemento de academia, ordenado por `order`, `pk`. **Elemento propio**: `board_item` (contenido de YouTube), `text`, `attachment_item` (elemento PDF / imagen del board), `unlock_day`. **Elemento de plantilla**: FK → `BoardItem` (`template_item`, `CASCADE`) cuyo contenido lee; solo guarda lo que cambia para el cliente, `unlock_day` (`null` = el de la plantilla) y `hidden_by_advisor`. Una fila por programa y elemento de plantilla (`client_lesson_program_template_item`); `available_day` es el día efectivo. |
 | `ClientMeasurement` | FK → perfil; medidas, `body_fat_pct` / `muscle_mass_kg` opcionales del cliente (solo API) y `bioimpedance`; `source=client\|advisor` (quién la creó); `hidden_by_advisor`. Una fila por cliente y fecha (`client_measurement_profile_day`). |
 | `ClientProgressPhoto` | FK → perfil; frente, espalda y lado; `source`; `hidden_by_advisor`. Una fila por cliente y fecha (`client_photo_profile_day`). `save()` pasa cada hueco por `core.utils.files.process_image_field_if_changed`, como los demás modelos con imágenes: WebP (calidad 80, máx. 1280 px) y, al sustituir un hueco, se borra su archivo anterior (celda web y API). |
@@ -129,10 +129,15 @@ zonas distintas. Nunca `date.today()`:
   (`build_measurement_chart`: Peso, Pecho, Brazo, Cadera, Cintura, Pierna, con los nombres de
   `ClientMeasurementForm`; solo filas visibles y sin las celdas vacías). `client_area_tools.js` pide
   su JSON (`client_area_measurement_chart`) y la dibuja con ApexCharts (CDN, cargado en
-  `contacts.html` como las estadísticas mensuales de la home); Desde / Hasta solo acotan el eje x.
-  Cada cambio guardado en una tabla envía el evento `clientAreaRecordsChanged` (`{"kind": ...}`) en
-  `HX-Trigger` (`views.RECORDS_CHANGED_EVENT`), y la gráfica se vuelve a pedir con los de
-  `measurement`.
+  `contacts.html` como las estadísticas mensuales de la home). Desde / Hasta son `<select>` con los
+  días que tienen medición (`dates` en ese JSON); Hasta solo ofrece días iguales o posteriores a
+  Desde. Cada cambio guardado en una tabla envía el evento `clientAreaRecordsChanged`
+  (`{"kind": ...}`) en `HX-Trigger` (`views.RECORDS_CHANGED_EVENT`), y la gráfica se vuelve a pedir
+  con los de `measurement`.
+- **Comparar fotos**, debajo de la tabla de Fotos (mismo patrón de collapse que la gráfica): el
+  asesor elige un tipo (Frente / Espalda / Lado) y dos fechas que tengan ese hueco, y las abre a
+  pantalla completa una al lado de la otra. El catálogo es JSON (`client_area_photo_compare`,
+  `build_photo_compare`); se refresca con los eventos `photo` de `clientAreaRecordsChanged`.
 - El botón de añadir y el de borrar fila reutilizan `cotton/grid_add_button` y
   `cotton/grid_row_delete`, los mismos de la tabla Programa. Borrar una fila solo marca
   `hidden_by_advisor`.
@@ -158,9 +163,11 @@ zonas distintas. Nunca `date.today()`:
 ### Academia: programas formativos
 
 La Academia es un conjunto de **programas formativos** (`TrainingProgram`) que se muestran como
-carpetas; al abrir uno se ven y se gestionan sus elementos (`ClientLesson`). Los programas se crean,
-se renombran y se borran (al borrar uno se van sus elementos, pero sus elementos del board se
-quedan). El interruptor No/Sí `academy_enabled` sigue en la asignación y vale para todos.
+carpetas **de la más nueva a la más antigua** (`created_at`, el mismo orden que `programs` en
+`GET /academy/`); al abrir uno se ven y se gestionan sus elementos (`ClientLesson`). Los programas
+se crean, se renombran y se borran (al borrar uno se van sus elementos, pero sus elementos del board
+se quedan). El interruptor No/Sí `academy_enabled` sigue en la asignación y vale para todos. El
+campo `order` se sigue asignando al crear y se envía en la API; ya no ordena la lista.
 
 Los programas son de la **asignación del cliente**, no del asesor:
 
@@ -232,7 +239,7 @@ modo para toda la academia. La copia desde otro cliente conserva la disponibilid
 | `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Conecta Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
-| `services/pane.py` | Contexto del panel, `build_catalog_context`, `build_measurement_chart` (series de la gráfica de Evolución), URLs de WhatsApp |
+| `services/pane.py` | Contexto del panel, `build_catalog_context`, `build_measurement_chart` (series de la gráfica + `dates`), `build_photo_compare`, URLs de WhatsApp |
 | `services/inbox.py` | `pending_access_requests_for_advisor` (de la más reciente a la más antigua, con contacto, URL de WhatsApp y antigüedad) para el bloque del home; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
 | `services/expiry.py` | Expiración horaria y `pause_programs_without_entitlement` |
 
@@ -323,7 +330,8 @@ Prefijo de URL: **`/client-area/`**
 | `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Parcial de la tabla |
 | `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | La celda (errores en la celda, 200), o la tabla (`HX-Retarget`) tras cambiar la fecha |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Parcial de la tabla |
-| `records/measurement/chart/` (GET) | `client_area_measurement_chart` | JSON `{"series": [{"name", "data": [[fecha, valor], ...]}]}` de la gráfica de Evolución |
+| `records/measurement/chart/` (GET) | `client_area_measurement_chart` | JSON `{"series": [{"name", "data": [[fecha, valor], ...]}], "dates": ["YYYY-MM-DD", ...]}` de la gráfica de Evolución |
+| `records/photo/compare/` (GET) | `client_area_photo_compare` | JSON `{"slots": [{"key", "label"}], "photos": [{"date", "front"?, "back"?, "side"?}]}` para comparar fotos |
 | `program/entries/add/` | `client_area_add_program_entry` | Parcial de la tabla del programa (fila nueva) |
 | `program/entries/<id>/<slot>/` | `client_area_set_program_file` | `ProgramCellForm` (`file` o `board_item`): parcial de la tabla del programa; toast 422 si no es válido, 404 si el hueco no existe |
 | `program/files/<id>/delete/` · `program/entries/<id>/delete/` | `client_area_delete_program_file`, `client_area_delete_program_entry` | Parcial de la tabla del programa |
@@ -370,8 +378,9 @@ Prefijo de URL: **`/client-area/`**
   arriba), activar/desactivar el acceso, enlace
   de WhatsApp y badges de App Store / Play Store (provisionales).
 - **Evolución / Fotos** — con scroll horizontal y edición en la propia tabla (ver *Tablas Evolución
-  / Fotos*); Evolución tiene además su gráfica con rango Desde / Hasta. Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`: desaparece del panel, pero la API de Conecta Fit la sigue
-  devolviendo.
+  / Fotos*); Evolución tiene además su gráfica con selects Desde / Hasta; Fotos tiene **Comparar
+  fotos**. Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`:
+  desaparece del panel, pero la API de Conecta Fit la sigue devolviendo.
 - **Productos nutricionales** — Productos y Explicación (el campo `observations`, la columna más
   ancha, `.ca-col-wide`), editados en la propia tabla como
   Evolución (ver *Tablas Evolución / Fotos*). Borrar elimina la fila. La API lee los productos en
