@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.2.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.1.0...v5.2.0) (2026-10-07)
+
+
+### Features
+
+* **client_area:** synced zoom photo compare viewer ([#324](https://github.com/Anthony-JCG/conectafam-plus/issues/324)) ([da78cd4](https://github.com/Anthony-JCG/conectafam-plus/commit/da78cd4f2bdbfcfec1e39bc8a045cdf87c485668))
+* **landing:** let pro users edit share profile photo ([#326](https://github.com/Anthony-JCG/conectafam-plus/issues/326)) ([4ec4027](https://github.com/Anthony-JCG/conectafam-plus/commit/4ec4027c0d89312bda4e653f92082a1cd26d0080))
+
 ## [5.1.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.0.0...v5.1.0) (2026-10-07)
 
 
