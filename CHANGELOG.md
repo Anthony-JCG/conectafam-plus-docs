@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.2.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.2.0...v5.2.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **comments:** online comments with linea break fixed ([#329](https://github.com/Anthony-JCG/conectafam-plus/issues/329)) ([3134723](https://github.com/Anthony-JCG/conectafam-plus/commit/3134723e83163ab9af772a8510d2aafc9ff14114))
+* **main:** prevent shortcuts bar from displaying for system accounts ([#327](https://github.com/Anthony-JCG/conectafam-plus/issues/327)) ([eec34de](https://github.com/Anthony-JCG/conectafam-plus/commit/eec34dec9a912b2254bdf82c1ab219fd56d812b6))
+
 ## [5.2.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.1.0...v5.2.0) (2026-10-07)
 
 
