@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.2.2](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.2.1...v5.2.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* **pricing:** guard duplicate add-on subscription in Stripe ([#330](https://github.com/Anthony-JCG/conectafam-plus/issues/330)) ([233fde7](https://github.com/Anthony-JCG/conectafam-plus/commit/233fde7066bf3582e52d417f9126474c19861a21))
+
 ## [5.2.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.2.0...v5.2.1) (2026-10-08)
 
 
