@@ -100,7 +100,7 @@ Prefijo de URL: **`/pricing/`**
 |---|---|---|
 | `""` | `pricing_page` | Listado de planes (HTML) |
 | `checkout/<level_code>/<period>/` | `create_checkout` | Redirección 303 a Stripe Checkout, o al Customer Portal cuando ya hay una suscripción activa |
-| `addon/<addon_code>/checkout/` | `create_addon_checkout` | POST (`next` = ruta de vuelta): Checkout del add-on como suscripción propia al precio del nivel del usuario; vuelve a `next` si ya tiene acceso o no hay precio |
+| `addon/<addon_code>/checkout/` | `create_addon_checkout` | POST (`next` = ruta de vuelta): Checkout del add-on como suscripción propia al precio del nivel del usuario; vuelve a `next` si ya tiene acceso, ya está suscrito en Stripe (`has_running_addon_subscription`) o no hay precio |
 | `checkout/success/` · `checkout/cancel/` | `checkout_success`, `checkout_cancel` | Páginas posteriores al checkout |
 | `portal/` | `customer_portal` | Redirección a una sesión nueva del Customer Portal |
 | `webhook/` | `stripe_webhook` | Receptor de webhooks con verificación de firma (`HttpResponse` 200/4xx/5xx) |
@@ -130,8 +130,10 @@ Versión de la API Stripe fijada por la integración: **2025-12-15**.
 
 **Subscriptions** — dejar **desactivado** *Limit customers to one subscription* de Checkout: el
 add-on de Área de clientes es una segunda suscripción. Una sola suscripción **de plan** por
-customer se garantiza en código (`create_checkout` manda al Customer Portal si ya hay plan activo).
-Cada usuario de la plataforma mapea a exactamente un customer de Stripe;
+customer se garantiza en código (`create_checkout` manda al Customer Portal si ya hay plan activo) y una
+suscripción por add-on (`create_addon_checkout` consulta a Stripe las suscripciones en curso del customer antes
+de abrir Checkout, así un doble clic o una segunda pestaña no la compran dos veces antes de que llegue el
+webhook). Cada usuario de la plataforma mapea a exactamente un customer de Stripe;
 `get_or_create_stripe_customer()` reutiliza `stripe_customer_id` o crea un customer nuevo con
 metadatos `user_id` / `username`.
 

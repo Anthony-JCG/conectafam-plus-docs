@@ -99,7 +99,7 @@ URL prefix: **`/pricing/`**
 |---|---|---|
 | `""` | `pricing_page` | Plan listing (HTML) |
 | `checkout/<level_code>/<period>/` | `create_checkout` | 303 redirect to Stripe Checkout, or to the Customer Portal when a subscription is already active |
-| `addon/<addon_code>/checkout/` | `create_addon_checkout` | POST (`next` = return path): Checkout of the add-on as its own subscription at the user's level price; redirects to `next` if already entitled or no price exists |
+| `addon/<addon_code>/checkout/` | `create_addon_checkout` | POST (`next` = return path): Checkout of the add-on as its own subscription at the user's level price; redirects to `next` if already entitled, already subscribed in Stripe (`has_running_addon_subscription`) or no price exists |
 | `checkout/success/` · `checkout/cancel/` | `checkout_success`, `checkout_cancel` | Post-checkout pages |
 | `portal/` | `customer_portal` | Redirect to a fresh Customer Portal session |
 | `webhook/` | `stripe_webhook` | Signature-verified webhook receiver (`HttpResponse` 200/4xx/5xx) |
@@ -129,7 +129,9 @@ Stripe API version pinned by the integration: **2025-12-15**.
 
 **Subscriptions** — leave Checkout's *Limit customers to one subscription* **off**: the client-area
 add-on is a second subscription. One **plan** subscription per customer is enforced in code
-(`create_checkout` sends users with an active plan to the Customer Portal). Each platform user maps
+(`create_checkout` sends users with an active plan to the Customer Portal) and one subscription per add-on
+(`create_addon_checkout` asks Stripe for the customer's running subscriptions before opening Checkout, so a
+double click or a second tab cannot buy it twice before the webhook arrives). Each platform user maps
 to exactly one Stripe customer; `get_or_create_stripe_customer()` reuses `stripe_customer_id` or
 creates a new customer with `user_id` / `username` metadata.
 
