@@ -1,6 +1,6 @@
 # Keyboard API — Technical Reference
 
-Backend API that powers the **mobile global keyboard** — a companion app to the Impact Tech
+Backend API that powers the **mobile global keyboard** — a companion app to the Conectafam Plus
 Boards module. The keyboard runs as an isolated, offline-capable extension. All data is stored
 locally on the device; the keyboard reads only from that local store and never makes direct API
 calls during use.
@@ -11,7 +11,7 @@ calls during use.
 
 ```
 ┌────────────────────────────────────────────┐
-│  Impact Tech Web (Django)               │
+│  Conectafam Plus Web (Django)               │
 │                                            │
 │  Board changes ──► Django Signals          │
 │                         │                  │
@@ -88,7 +88,7 @@ The chosen architecture separates concerns cleanly:
 
 | Environment | Base URL |
 |---|---|
-| Production | `https://impact-tech.app/api/keyboard/` |
+| Production | `https://conectafam-plus.com/api/keyboard/` |
 | Local dev (`runserver`) | `http://localhost:8000/api/keyboard/` |
 | Local dev (Docker) | `http://localhost:${WEB_PORT}/api/keyboard/` — Nginx fronts Gunicorn, which binds `:8080` inside the container. See [`docs/docker.md`](../../docs/docker.md) |
 
@@ -127,8 +127,8 @@ Authenticates with platform credentials and returns a persistent device token. N
 
 | Field | Required | Description |
 |---|---|---|
-| `username` | Yes | Impact Tech username |
-| `password` | Yes | Impact Tech password |
+| `username` | Yes | Conectafam Plus username |
+| `password` | Yes | Conectafam Plus password |
 | `device_id` | Yes | Stable UUID generated on first install; stored in Keychain / Keystore |
 | `device_name` | No | Human-readable label shown in admin (e.g. `"iPhone 15 Pro"`) |
 
@@ -375,9 +375,9 @@ Authorization: Token <token>
   "id": 1,
   "title": "Marketing Resources",
   "description": "Links and files for the marketing team.",
-  "cover_image": "https://impact-tech.app/media/boards/covers/cover.jpg",
+  "cover_image": "https://conectafam-plus.com/media/boards/covers/cover.jpg",
   "cover_image_size": 24576,
-  "url": "https://impact-tech.app/boards/1/",
+  "url": "https://conectafam-plus.com/boards/1/",
   "order": 0,
   "updated_at": "2026-06-25T22:00:00.000000+00:00",
   "owner_username": "johndoe",
@@ -404,9 +404,9 @@ Authorization: Token <token>
   "id": 1,
   "title": "Marketing Resources",
   "description": "Links and files for the marketing team.",
-  "cover_image": "https://impact-tech.app/media/boards/covers/cover.jpg",
+  "cover_image": "https://conectafam-plus.com/media/boards/covers/cover.jpg",
   "cover_image_size": 24576,
-  "url": "https://impact-tech.app/boards/1/",
+  "url": "https://conectafam-plus.com/boards/1/",
   "order": 0,
   "updated_at": "2026-06-25T22:00:00.000000+00:00",
   "owner_username": "johndoe",
@@ -467,11 +467,11 @@ Authorization: Token <token>
   "display_title": "Sales intro",
   "text_content": "",
   "url": "",
-  "file_url": "https://impact-tech.app/media/boards/files/recording",
+  "file_url": "https://conectafam-plus.com/media/boards/files/recording",
   "file_name": "recording",
   "file_size": 1048576,
   "file_mime_type": "audio/mpeg",
-  "share_url": "https://impact-tech.app/media/boards/files/recording",
+  "share_url": "https://conectafam-plus.com/media/boards/files/recording",
   "preview_url": "",
   "preview_size": 0,
   "youtube_video_id": "",
@@ -653,7 +653,7 @@ Public boards created by other users are never individually push-notified (fan-o
 
 ## Board Visibility Rules
 
-The API returns all boards the user is allowed to see, applying the same rules as Impact Tech web:
+The API returns all boards the user is allowed to see, applying the same rules as Conectafam Plus web:
 
 1. **Owned** — boards created by the user
 2. **Library** — boards saved via `BoardLibraryEntry`

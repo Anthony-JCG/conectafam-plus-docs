@@ -1,6 +1,6 @@
-# Impact Wellness Client API — Referencia técnica
+# Conecta Fit Client API — Referencia técnica
 
-API JSON para la app nativa del consumidor **Impact Wellness** (área de clientes).
+API JSON para la app nativa del consumidor **Conecta Fit** (área de clientes).
 Montaje: `/api/client/`. Sigue los patrones de `keyboard_api` (token por
 dispositivo, `JsonResponse`, vistas function-based con `csrf_exempt`), pero
 autentica con `ClientProfile.access_code`, no con credenciales de `users.User`.
@@ -13,7 +13,7 @@ Las audiencias de token están aisladas: `ClientDeviceToken` no se acepta en
 ## Visión general
 
 ```
-Asesor (web)                  Cliente (app nativa Impact Wellness)
+Asesor (web)                  Cliente (app nativa Conecta Fit)
 ─────────────                 ────────────────────────────────
 users.User                    ClientProfile ↔ Contact
 sesión Django / CSRF          ClientDeviceToken (device_id + token hex)
@@ -118,7 +118,6 @@ Sin ella se usa la zona del servidor (`settings.TIME_ZONE`).
 | POST | `/auth/fcm-token/` | token + Firebase | Registrar el token FCM del dispositivo |
 | GET | `/me/` | token | Perfil básico + resumen del programa + `profile_complete` |
 | GET · PATCH | `/profile/` | token | "Mi perfil": sexo, fecha de nacimiento, altura, nivel de actividad |
-| POST | `/profile/photo/` | token | Sube o reemplaza la foto de perfil (multipart `photo`) |
 | GET | `/home/` | token + activo | Saludo, métricas actuales, deltas semanales, WhatsApp del asesor |
 | GET | `/measurements/` | token | Historial de medidas (gráficas) |
 | POST | `/measurements/` | token + activo | Guarda la medida del día (upsert por fecha) |
@@ -246,13 +245,11 @@ plantilla, o que se oculta a este cliente, deja de listarse y su detalle respond
   "access_code": "ABCD2345",
   "program": { "status": "active", "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "program_finished": false,
-  "profile_complete": true,
-  "photo_url": "https://media.example.com/media/client_area/profile_photos/image_3f2a9c.webp"
+  "profile_complete": true
 }
 ```
 
 `profile_complete` es `false` mientras falte algún dato de `/profile/` (la app los pide).
-`photo_url` es la URL absoluta de la foto de perfil, `null` si no hay.
 `program_finished` es `true` cuando el acceso está `active` pero no hay programa en curso (ni activo
 ni programado). Cuando un
 programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_status: "none"`,
@@ -324,7 +321,6 @@ token.
   "activity_level": null,
   "missing": ["activity_level"],
   "profile_complete": false,
-  "photo_url": null,
   "activity_levels": [
     { "value": 1, "label": "Sedentario", "description": "Poco o ningún ejercicio.", "multiplier": 1.2 },
     { "value": 2, "label": "Ligero", "description": "Ejercicio ligero 1–3 días por semana.", "multiplier": 1.375 },
@@ -334,17 +330,6 @@ token.
   ]
 }
 ```
-
-### POST /profile/photo/
-
-Campo multipart `photo` (imagen). Solo token; no hace falta un programa activo. La imagen se
-guarda en webp (ancho máximo 1280 px, igual que las fotos de progreso) en el storage por defecto
-(R2 en producción) y reemplaza la anterior, cuyo archivo se borra.
-
-- **200** `{"photo_url": "https://media.example.com/media/client_area/profile_photos/image_3f2a9c.webp"}`
-- **400** `{"error": ...}`: no llega archivo o no es una imagen válida.
-
-`GET /me/` y `GET /profile/` también devuelven `photo_url`.
 
 ### GET · POST /measurements/
 
@@ -529,7 +514,7 @@ asesor (ActivityContact + web push + bandeja). **No** exige acceso activo.
   "purchase_date": "2026-09-20",
   "access_status": "pending",
   "advisor_whatsapp_url": "https://wa.me/593999111222?text=...",
-  "whatsapp_message": "Hola, quiero continuar mi programa Impact Wellness. Pedido: ORD-42. Fecha de compra: 2026-09-20."
+  "whatsapp_message": "Hola, quiero continuar mi programa Conecta Fit. Pedido: ORD-42. Fecha de compra: 2026-09-20."
 }
 ```
 

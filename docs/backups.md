@@ -1,9 +1,8 @@
 # MySQL backups to Cloudflare R2
 
-Runbook for the nightly database dump. It applies to **production only**. MySQL runs in the `db`
-container of the Docker stack; the host runs the job with `docker compose exec`, `gzip` and
-`rclone`. It does not go through Django or Celery. The deployment is documented in
-[docker.md](docker.md).
+Runbook for the nightly database dump. It applies to **production only** (MySQL on the host, Model B)
+and runs on the server with `mysqldump`, `gzip` and `rclone` — it does not go through Django or
+Celery. The surrounding deployment is documented in [docker.md](docker.md).
 
 ## Behaviour
 
@@ -11,78 +10,87 @@ container of the Docker stack; the host runs the job with `docker compose exec`,
 |---|---|
 | Schedule | Daily at **01:00 UTC** (`systemd` timer) |
 | Destination | `r2-media:<bucket>/database-backups/<DB_NAME>_YYYYMMDDTHHMMSSZ.sql.gz` |
-| Retention | The **7** most recent copies; pruning runs **only after** a successful upload |
-| Tooling | `docker compose exec db mysqldump --single-transaction`, `gzip`, `rclone` |
+| Retention | The **7** most recent copies (by name/timestamp); pruning runs **only after** a successful upload |
+| Tooling | `mysqldump --single-transaction`, `gzip`, `rclone` |
 
-MySQL credentials are read inside the container (`MYSQL_ROOT_PASSWORD`, set from `.env`). The R2
-keys live only in rclone (`/root/.config/rclone/rclone.conf`, remote `[r2-media]`). The backup
-environment file only names the database and destination.
+The R2 keys live only in rclone (`/root/.config/rclone/rclone.conf`, remote `[r2-media]`). The
+backup environment file only names the destination: `RCLONE_REMOTE=r2-media:BUCKET_NAME`.
 
 ## Files in the repository
 
 | Path | Purpose |
 |---|---|
 | [`scripts/backup_mysql_r2.sh`](../scripts/backup_mysql_r2.sh) | The job script |
-| [`scripts/mysql-backup.env.example`](../scripts/mysql-backup.env.example) | Environment template (no secrets) |
-| [`scripts/systemd/impact-tech-mysql-backup.service`](../scripts/systemd/impact-tech-mysql-backup.service) | Oneshot unit |
-| [`scripts/systemd/impact-tech-mysql-backup.timer`](../scripts/systemd/impact-tech-mysql-backup.timer) | Timer at 01:00 UTC |
+| [`scripts/mysql-backup.env.example`](../scripts/mysql-backup.env.example) | Environment template (no R2 secrets) |
+| [`scripts/mysql-backup.cnf.example`](../scripts/mysql-backup.cnf.example) | MySQL defaults template |
+| [`scripts/systemd/platform-mysql-backup.service`](../scripts/systemd/platform-mysql-backup.service) | Oneshot unit |
+| [`scripts/systemd/platform-mysql-backup.timer`](../scripts/systemd/platform-mysql-backup.timer) | Timer at 01:00 UTC |
 
 ## Server installation
 
-Requirements on the host: Docker with the stack running in `/home/impact-tech`, `gzip`, and
-`rclone`. The service runs as **root**, so it reads `/root/.config/rclone/rclone.conf`.
+Requirements: `mysqldump`, `gzip`, and `rclone` with the `[r2-media]` remote already configured (the
+same one used for the media migration). The service runs as **root**, so it reads
+`/root/.config/rclone/rclone.conf`.
 
-### 1. rclone remote
+### 1. MySQL credentials (outside git)
 
 ```bash
-sudo apt install -y rclone
-sudo rclone config   # new remote "r2-media", type s3, provider Cloudflare
+sudo mkdir -p /etc/platform
+sudo cp /home/Platform/scripts/mysql-backup.cnf.example /etc/platform/mysql-backup.cnf
+sudo cp /home/Platform/scripts/mysql-backup.env.example /etc/platform/mysql-backup.env
+sudo chmod 600 /etc/platform/mysql-backup.cnf /etc/platform/mysql-backup.env
+sudo chown root:root /etc/platform/mysql-backup.cnf /etc/platform/mysql-backup.env
 ```
 
-Use the R2 access key, secret and endpoint (`https://<account_id>.r2.cloudflarestorage.com`).
-Check it with `sudo rclone lsd r2-media:`.
+Then edit:
 
-### 2. Backup environment (outside git)
+- `/etc/platform/mysql-backup.cnf` — MySQL user and password.
+- `/etc/platform/mysql-backup.env` — `RCLONE_REMOTE=r2-media:BUCKET_NAME` (the same bucket as media).
 
-```bash
-sudo mkdir -p /etc/impact-tech
-sudo cp /home/impact-tech/scripts/mysql-backup.env.example /etc/impact-tech/mysql-backup.env
-sudo chmod 600 /etc/impact-tech/mysql-backup.env
-sudo chown root:root /etc/impact-tech/mysql-backup.env
+A dedicated MySQL user is recommended:
+
+```sql
+CREATE USER 'platform_backup'@'localhost' IDENTIFIED BY '...';
+GRANT SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES ON ConectaPlus.* TO 'platform_backup'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
-Edit `/etc/impact-tech/mysql-backup.env`: `DB_NAME` must match `.env`, and `RCLONE_REMOTE` points to
-the bucket (`r2-media:impact-tech`).
+In `/etc/platform/mysql-backup.cnf` use `host=localhost` (socket). Do **not** use `127.0.0.1`: that
+is TCP, and MySQL then looks for `'platform_backup'@'127.0.0.1'`, a different account → error 1045.
 
-### 3. Units
+The script uses `--no-tablespaces` (so the `PROCESS` privilege is not required) and calls rclone with
+`--s3-no-check-bucket` (R2 usually denies `CreateBucket` to the token).
 
-The production deploy copies and enables the units on every release. To install them by hand:
+### 2. Script and units
+
+After `git pull` in `/home/Platform`:
 
 ```bash
-sudo cp /home/impact-tech/scripts/systemd/impact-tech-mysql-backup.service /etc/systemd/system/
-sudo cp /home/impact-tech/scripts/systemd/impact-tech-mysql-backup.timer /etc/systemd/system/
+sudo cp /home/Platform/scripts/systemd/platform-mysql-backup.service /etc/systemd/system/
+sudo cp /home/Platform/scripts/systemd/platform-mysql-backup.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now impact-tech-mysql-backup.timer
+sudo systemctl enable --now platform-mysql-backup.timer
 ```
 
 `chmod +x` is not needed on the server: the unit invokes `/bin/bash …/backup_mysql_r2.sh`. A local
-`chmod` would dirty the working tree and break the deploy (`git reset`).
+`chmod` would dirty the working tree and break auto-deploy (`git checkout`/`reset`).
 
 Manual test:
 
 ```bash
-sudo systemctl start impact-tech-mysql-backup.service
-sudo journalctl -u impact-tech-mysql-backup.service -e --no-pager
-sudo rclone lsf r2-media:impact-tech/database-backups/
-systemctl list-timers | grep impact-tech-mysql
+sudo systemctl start platform-mysql-backup.service
+sudo journalctl -u platform-mysql-backup.service -e --no-pager
+# or:
+sudo bash /home/Platform/scripts/backup_mysql_r2.sh
+rclone lsf r2-media:BUCKET_NAME/database-backups/
+systemctl list-timers | grep platform-mysql
 ```
 
 ## Restoring a dump
 
 ```bash
-cd /home/impact-tech
-sudo rclone copyto r2-media:impact-tech/database-backups/<DB_NAME>_YYYYMMDDTHHMMSSZ.sql.gz /tmp/restore.sql.gz
-gunzip -c /tmp/restore.sql.gz | docker compose exec -T db sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD"'
+rclone copyto r2-media:BUCKET_NAME/database-backups/ConectaPlus_YYYYMMDDTHHMMSSZ.sql.gz /tmp/restore.sql.gz
+gunzip -c /tmp/restore.sql.gz | mysql --defaults-extra-file=/etc/platform/mysql-backup.cnf
 ```
 
 The dump is taken with `--databases`, so it contains `CREATE DATABASE` / `USE`. Restore it on a test
@@ -90,5 +98,8 @@ host before touching production.
 
 ## Notes
 
-- The timer uses `Persistent=true`: if the server was off at 01:00 UTC, the job runs on the next boot.
-- The `mysql_data` volume is the live data; never run `docker compose down -v` in production.
+- The timer uses `Persistent=true`: if the server was powered off at 01:00 UTC, the job runs on the
+  next boot.
+- There are no automatic backups of the test environment.
+- Once MySQL moves into a container (Model A), the dump will have to be adapted to
+  `docker compose exec db mysqldump` (or the container's host socket).
