@@ -1,8 +1,8 @@
 # Containerised deployment
 
-Docker architecture of Conectafam Plus: a Django 5.2 web application stack, aligned with the
-reference configuration in `production_settings/`. This document covers how the stack is built, how
-it is operated in each environment, and how to migrate an existing systemd deployment onto it.
+Docker architecture of Impact Tech: a Django 5.2 web application stack where every service (web,
+Celery, MySQL, Redis, Nginx) runs in a container. This document covers how the stack is built and how
+it is operated in each environment.
 
 ## Overview
 
@@ -26,40 +26,20 @@ it is operated in each environment, and how to migrate an existing systemd deplo
 
 ## Celery settings
 
-| Parameter | Configured in | systemd equivalent |
-|---|---|---|
-| `CELERY_CONCURRENCY` | `.env` variable, consumed by `docker-compose.yml` | `--concurrency` on each unit |
-| Service replicas | `--scale celery-worker=N` flag on the deploy command | N `celery-worker@{1..N}` units |
+| Parameter | Configured in |
+|---|---|
+| `CELERY_CONCURRENCY` | `.env` variable, consumed by `docker-compose.yml` |
+| Service replicas | `--scale celery-worker=N` flag on the deploy command |
 
 Docker Compose does not interpolate `--scale` from `.env`; the replica count is passed on the command
 line (test: 2, production: 5).
 
-## Data deployment models
+## Data services
 
-### Model A — Full stack (default)
+### Full stack — Full stack (default)
 
 `docker-compose.yml` starts `db` and `redis` containers. Maximum portability and parity between
 environments: the same definition works on any Docker host.
-
-### Model B — MySQL/Redis on the host (migration)
-
-`docker-compose.host-services.yml` disables the `db`/`redis` containers. **web**, **celery** and
-**nginx** use `network_mode: host`: the app talks to MySQL/Redis on `127.0.0.1` and nginx proxies to
-`127.0.0.1:8080` (`docker/nginx/${NGINX_CONFIG}.host.conf`).
-
-On Linux, a bridge-network container **cannot** reach MySQL on the host's `127.0.0.1`
-(`Waiting for host.docker.internal:3306`) nor, with UFW enabled, Gunicorn through
-`host.docker.internal:8080` (curl to `127.0.0.1:8080` on the host works, but HTTPS through nginx
-hangs).
-
-Limitations:
-
-- Coupled to one specific host (paths, sockets, firewall).
-- Only one process can listen on host ports 80/443 (stop the systemd nginx before the stack).
-- Cannot be reproduced on another machine without equivalent host services.
-
-**Recommendation:** Model A is the target architecture. Use Model B only during the transition, and
-plan the data migration to a container or a managed service.
 
 ## Architecture
 
@@ -78,7 +58,7 @@ plan the data migration to a container or a managed service.
               ┌────────────────────┼────────────────────┐
               │                    │                    │
         db container        redis container      celery-worker × N (--scale)
-         (Model A)            (Model A)          celery-beat
+                                                 celery-beat
 ```
 
 ## Nginx configuration
@@ -87,8 +67,8 @@ Selected through `NGINX_CONFIG` in `.env`:
 
 | File | Domain | Certificates |
 |---|---|---|
-| `docker/nginx/production.conf` | `conectafam-plus.com`, `www.conectafam-plus.com` | `/etc/letsencrypt/live/conectafam-plus.com/` |
-| `docker/nginx/test.conf` | `debug.conectafam-plus.com` | `/etc/letsencrypt/live/debug.conectafam-plus.com/` |
+| `docker/nginx/production.conf` | `impact-tech.app`, `www.impact-tech.app` | `/etc/letsencrypt/live/impact-tech.app/` |
+| `docker/nginx/test.conf` | `debug.impact-tech.app` | `/etc/letsencrypt/live/debug.impact-tech.app/` |
 
 Host certificates are mounted into the container: `/etc/letsencrypt:/etc/letsencrypt:ro`.
 
@@ -112,7 +92,7 @@ Celery is optional: add `--profile workers`.
 ### Test environment
 
 ```bash
-cd /home/Platform
+cd /home/impact-tech
 docker compose up -d --build --scale celery-worker=2
 ```
 
@@ -122,7 +102,7 @@ docker compose up -d --build --scale celery-worker=2
 ### Production environment
 
 ```bash
-cd /home/Platform
+cd /home/impact-tech
 docker compose up -d --build --scale celery-worker=5
 ```
 
@@ -131,7 +111,7 @@ docker compose up -d --build --scale celery-worker=5
 ### Version update
 
 ```bash
-cd /home/Platform
+cd /home/impact-tech
 git pull
 docker compose up -d --build --scale celery-worker=5
 ```
@@ -144,79 +124,13 @@ docker compose up -d --scale celery-worker=5
 
 Replace `5` with `2` in the test environment.
 
-## Migration from a systemd deployment
-
-### Prerequisites
-
-```bash
-sudo apt update && sudo apt install -y docker.io docker-compose-v2
-sudo usermod -aG docker $USER
-```
-
-### Code and variables
-
-```bash
-cd /home/Platform
-git pull
-```
-
-Keep the server's existing `.env`. Add any missing variables: `NGINX_CONFIG`, `GUNICORN_WORKERS`,
-`CELERY_CONCURRENCY`, `NGINX_HTTP_PORT`, `NGINX_HTTPS_PORT`.
-
-### MySQL/Redis on the host (Model B, optional)
-
-```bash
-cp docker-compose.host-services.yml docker-compose.override.yml
-```
-
-### Disabling the systemd units
-
-**Mandatory before `docker compose up` under Model B** (`docker-compose.override.yml` →
-`network_mode: host`). If the systemd `gunicorn` unit is still running, the `web` container cannot
-bind port 8080 (`Address already in use`) while nginx keeps serving traffic from the old host
-process.
-
-Stop and disable the units replaced by containers (ports 80, 443 and **8080**):
-
-```bash
-sudo systemctl stop gunicorn celery-beat nginx
-sudo systemctl stop 'celery-worker@*'
-sudo systemctl disable gunicorn celery-beat nginx
-sudo systemctl disable celery-worker@{1..5}
-ss -tlnp | grep ':8080'   # no host gunicorn should remain
-docker compose up -d --build --scale celery-worker=5
-```
-
-If the site responds but `docker compose logs web` shows `Address already in use`, traffic is still
-being served by **systemd gunicorn**, not by the container.
-
-The host `mysql` and `redis-server` units stay active only under Model B.
-
-### Media migration
-
-The logical `media_data` volume is mounted at `/app/media` in the `web` service. There is no need to
-know the internal Docker volume name (`platform_media_data`); the Compose service is enough:
-
-```bash
-docker compose build web
-docker compose run --rm --user root --entrypoint sh \
-  -v /home/Platform/media:/src:ro \
-  web -c "cp -a /src/. /app/media/ && chown -R app:app /app/media"
-```
-
-The `media_data` volume is created as root while the `web` process runs as the `app` user, so the
-copy must run as root and fix ownership afterwards.
-
-Docker Compose naming convention: project `name` (`platform`) + volume key (`media_data`) → physical
-volume `platform_media_data`. Only relevant when inspecting with `docker volume inspect`.
-
 ### Validation
 
 ```bash
 docker compose ps
 docker compose logs -f web
-curl -I https://conectafam-plus.com
-curl -I https://debug.conectafam-plus.com
+curl -I https://impact-tech.app
+curl -I https://debug.impact-tech.app
 ```
 
 ## Volumes
@@ -224,15 +138,13 @@ curl -I https://debug.conectafam-plus.com
 | Compose key | Contents |
 |---|---|
 | `media_data` | Uploaded files and HLS segments |
-| `mysql_data` | MySQL data (Model A) |
-| `redis_data` | Redis AOF persistence (Model A) |
+| `mysql_data` | MySQL data |
+| `redis_data` | Redis AOF persistence |
 | *(none for beat)* | The Celery beat schedule lives at `/app/celerybeat-data` inside the container — no volume, which avoids root-owned Docker volumes |
 
-After migrating from a deployment that used a `celerybeat_data` volume, the orphaned volume can be
-removed: `docker volume rm platform_celerybeat_data`.
 
 Static files are **build artefacts**: `collectstatic` runs in the app `Dockerfile` (writing to
-`/app/staticfiles`) and the **nginx** image copies that same tree from the `platform-app` image
+`/app/staticfiles`) and the **nginx** image copies that same tree from the `impact-tech-app` image
 (`docker/Dockerfile.nginx` → `/var/www/static/`). Django and nginx therefore share exactly the same
 manifest; there is no volume and no host directory.
 
@@ -261,7 +173,6 @@ not, which avoids races against MySQL when several containers deploy at once.
 | Condition | Action |
 |---|---|
 | `DEBUG != 1` | Waits for TCP on MySQL and Redis |
-| `$1 = gunicorn` | Checks that the bind port is free |
 | Image build | `collectstatic` + `docker/verify_collectstatic.py`; writes `.static_version` |
 
 ### Startup order (production)
@@ -289,12 +200,11 @@ validates the `Dockerfile` on every PR that touches Python code.
 | Environment | MySQL / Redis |
 |---|---|
 | CI | Redis in a container; SQLite for tests |
-| Servers (transitional) | Model B: host services through `docker-compose.host-services.yml` |
-| Servers (target) | Model A: `db` and `redis` containers |
+| Servers | `db` and `redis` containers |
 
 ## Database backups
 
-In production (MySQL on the host), daily dumps to Cloudflare R2 are documented in
+In production, daily dumps to Cloudflare R2 are documented in
 [backups.md](backups.md) (`scripts/backup_mysql_r2.sh` + systemd timer at 01:00 UTC).
 
 ## Continuous deployment
@@ -321,17 +231,16 @@ update the containers. `.env` is not in git and is applied at runtime with `up -
 rebuild.
 
 On the host, always run `git fetch` + `git reset --hard` (which clears dirt on tracked files, for
-example a local `chmod`) and then `up -d`. `git clean` is deliberately not used, so untracked `.env`
-and `docker-compose.override.yml` are preserved.
+example a local `chmod`) and then `up -d`. `git clean` is deliberately not used, so the untracked `.env` is
+preserved.
 
 ## File reference
 
 | File | Purpose |
 |---|---|
 | `Dockerfile` | App image and nginx image |
-| `docker-compose.yml` | Base stack (Model A) |
+| `docker-compose.yml` | Base stack (`db` and `redis` included) |
 | `docker-compose.dev.yml` | Local development stack (isolated, SQLite) |
-| `docker-compose.host-services.yml` | Model B template (migration) |
 | `docker-compose.ci.yml` | CI override (pytest in a container) |
 | `.env.docker.example` | Variable template |
 | `scripts/backup_mysql_r2.sh` | MySQL → R2 backup (see [backups.md](backups.md)) |

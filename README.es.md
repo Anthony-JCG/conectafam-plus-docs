@@ -1,6 +1,6 @@
-# Conectafam Plus
+# Impact Tech
 
-Monolito Django 5.2 que impulsa **Conectafam Plus**, una plataforma de network marketing para
+Monolito Django 5.2 que impulsa **Impact Tech**, una plataforma de network marketing para
 distribuidores: gestión de equipo, formaciones, retos, CRM, tableros, landing pages, directos en vivo
 y facturación por suscripción.
 
@@ -124,7 +124,7 @@ en el cliente lo consume el ciclo de vida de modales en `static/js/core.js`. El 
 | [`pricing`](apps/pricing/README.es.md)             | `/pricing/`                    | No   | Suscripciones Stripe, Customer Portal, webhooks, cancelación de prueba gratuita                    |
 | [`keyboard_api`](apps/keyboard_api/README.es.md)   | `/api/keyboard/`               | n/a  | API JSON autenticada por token para el cliente del teclado móvil                                   |
 | [`client_area`](apps/client_area/README.es.md)     | `/client-area/`                | Yes  | Área de clientes del asesor: perfiles, programas, medidas, productos, academia                     |
-| [`client_api`](apps/client_api/README.es.md)       | `/api/client/`                 | n/a  | API JSON autenticada por token para la app de clientes Conecta Fit                                 |
+| [`client_api`](apps/client_api/README.es.md)       | `/api/client/`                 | n/a  | API JSON autenticada por token para la app de clientes Impact Wellness                                 |
 
 Un prefijo `—` indica que la app no posee URLConf. `core` no tiene `urls.py`: sus pocas vistas se
 registran una a una en la raíz del sitio en `Platform/urls.py` (`/sw.js`, `/share-preview/`,
@@ -149,12 +149,10 @@ El proyecto está contenerizado en **tres entornos**, todos definidos por el mis
 | Producción          | `docker-compose.yml` (`NGINX_CONFIG=production`)                 | Gunicorn, 10 workers | `--scale celery-worker=5`, concurrencia 10 |
 
 
-Hay dos modelos de despliegue de datos: el **Modelo A** ejecuta `db` y `redis` como contenedores
-(arquitectura objetivo), mientras que el **Modelo B** (`docker-compose.host-services.yml`) deja
-MySQL y Redis en el host durante la migración desde el despliegue legado con systemd.
+MySQL (`db`) y Redis (`redis`) corren como contenedores dentro del mismo proyecto de Compose.
 
 > Referencia completa — diagrama de arquitectura, configuración de Nginx, comportamiento del
-> entrypoint, volúmenes, CI/CD y procedimiento de migración: [`docs/docker.es.md`](docs/docker.es.md).
+> entrypoint, volúmenes, y CI/CD: [`docs/docker.es.md`](docs/docker.es.md).
 > Procedimiento de backup y restauración de base de datos: [`docs/backups.es.md`](docs/backups.es.md).
 
 
@@ -294,7 +292,7 @@ Workflow: [`.github/workflows/sync-docs.yml`](.github/workflows/sync-docs.yml).
 
 | Documento                                                    | Contenido                                                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| [`docs/docker.es.md`](docs/docker.es.md)                       | Arquitectura de contenedores, tres entornos, Nginx, entrypoint, volúmenes, CI/CD, migración systemd |
+| [`docs/docker.es.md`](docs/docker.es.md)                       | Arquitectura de contenedores, tres entornos, Nginx, entrypoint, volúmenes, CI/CD |
 | [`docs/backups.es.md`](docs/backups.es.md)                     | Backup y restauración de base de datos                                                            |
 | [`docs/user-levels-cache.es.md`](docs/user-levels-cache.es.md) | Caché Redis de `user_levels`: claves, TTL, invalidación, depuración                               |
 | [`CHANGELOG.md`](CHANGELOG.md)                                 | Historial de releases                                                                             |

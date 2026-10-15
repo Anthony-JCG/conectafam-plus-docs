@@ -1,7 +1,7 @@
 # Keyboard API — Referencia técnica
 
 API backend que alimenta el **teclado global móvil** — una app compañera del módulo Boards de
-Conectafam Plus. El teclado opera como una extensión aislada, capaz de funcionar sin conexión.
+Impact Tech. El teclado opera como una extensión aislada, capaz de funcionar sin conexión.
 Todos los datos se almacenan localmente en el dispositivo; el teclado solo lee de ese almacén local
 y nunca hace llamadas directas a la API durante el uso.
 
@@ -11,7 +11,7 @@ y nunca hace llamadas directas a la API durante el uso.
 
 ```
 ┌────────────────────────────────────────────┐
-│  Conectafam Plus Web (Django)               │
+│  Impact Tech Web (Django)               │
 │                                            │
 │  Board changes ──► Django Signals          │
 │                         │                  │
@@ -96,7 +96,7 @@ La arquitectura elegida separa las responsabilidades de forma limpia:
 
 | Entorno | URL base |
 |---|---|
-| Producción | `https://conectafam-plus.com/api/keyboard/` |
+| Producción | `https://impact-tech.app/api/keyboard/` |
 | Desarrollo local (`runserver`) | `http://localhost:8000/api/keyboard/` |
 | Desarrollo local (Docker) | `http://localhost:${WEB_PORT}/api/keyboard/` — Nginx hace de front de Gunicorn, que escucha en `:8080` dentro del contenedor. Ver [`docs/docker.es.md`](../../docs/docker.es.md) |
 
@@ -140,8 +140,8 @@ requiere cabecera `Authorization`.
 
 | Campo | Obligatorio | Descripción |
 |---|---|---|
-| `username` | Sí | Nombre de usuario de Conectafam Plus |
-| `password` | Sí | Contraseña de Conectafam Plus |
+| `username` | Sí | Nombre de usuario de Impact Tech |
+| `password` | Sí | Contraseña de Impact Tech |
 | `device_id` | Sí | UUID estable generado en la primera instalación; se guarda en Keychain / Keystore |
 | `device_name` | No | Etiqueta legible mostrada en admin (p. ej. `"iPhone 15 Pro"`) |
 
@@ -405,9 +405,9 @@ Authorization: Token <token>
   "id": 1,
   "title": "Marketing Resources",
   "description": "Links and files for the marketing team.",
-  "cover_image": "https://conectafam-plus.com/media/boards/covers/cover.jpg",
+  "cover_image": "https://impact-tech.app/media/boards/covers/cover.jpg",
   "cover_image_size": 24576,
-  "url": "https://conectafam-plus.com/boards/1/",
+  "url": "https://impact-tech.app/boards/1/",
   "order": 0,
   "updated_at": "2026-06-25T22:00:00.000000+00:00",
   "owner_username": "johndoe",
@@ -436,9 +436,9 @@ reconstruye el árbol con `parent_id` en carpetas y `folder_id` en ítems.
   "id": 1,
   "title": "Marketing Resources",
   "description": "Links and files for the marketing team.",
-  "cover_image": "https://conectafam-plus.com/media/boards/covers/cover.jpg",
+  "cover_image": "https://impact-tech.app/media/boards/covers/cover.jpg",
   "cover_image_size": 24576,
-  "url": "https://conectafam-plus.com/boards/1/",
+  "url": "https://impact-tech.app/boards/1/",
   "order": 0,
   "updated_at": "2026-06-25T22:00:00.000000+00:00",
   "owner_username": "johndoe",
@@ -499,11 +499,11 @@ reconstruye el árbol con `parent_id` en carpetas y `folder_id` en ítems.
   "display_title": "Sales intro",
   "text_content": "",
   "url": "",
-  "file_url": "https://conectafam-plus.com/media/boards/files/recording",
+  "file_url": "https://impact-tech.app/media/boards/files/recording",
   "file_name": "recording",
   "file_size": 1048576,
   "file_mime_type": "audio/mpeg",
-  "share_url": "https://conectafam-plus.com/media/boards/files/recording",
+  "share_url": "https://impact-tech.app/media/boards/files/recording",
   "preview_url": "",
   "preview_size": 0,
   "youtube_video_id": "",
@@ -700,7 +700,7 @@ fan-out a todos los usuarios autenticados no escala). Aparecen en la siguiente s
 ## Reglas de visibilidad de tableros
 
 La API devuelve todos los tableros que el usuario puede ver, aplicando las mismas reglas que la web
-de Conectafam Plus:
+de Impact Tech:
 
 1. **Owned** — tableros creados por el usuario
 2. **Library** — tableros guardados vía `BoardLibraryEntry`

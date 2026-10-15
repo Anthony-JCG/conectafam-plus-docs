@@ -1,6 +1,6 @@
-# Conecta Fit Client API — Technical Reference
+# Impact Wellness Client API — Technical Reference
 
-Backend JSON API for the **Conecta Fit** native consumer app (client area).
+Backend JSON API for the **Impact Wellness** native consumer app (client area).
 Mount point: `/api/client/`. Mirrors `keyboard_api` patterns (device tokens,
 `JsonResponse`, csrf-exempt function views) but authenticates via
 `ClientProfile.access_code`, not `users.User` credentials.
@@ -13,7 +13,7 @@ Token audiences are isolated: `ClientDeviceToken` is never accepted by
 ## Architecture Overview
 
 ```
-Advisor (web)                 Client (Conecta Fit native app)
+Advisor (web)                 Client (Impact Wellness native app)
 ─────────────                 ───────────────────────────────
 users.User                    ClientProfile ↔ Contact
 Django session / CSRF         ClientDeviceToken (device_id + hex token)
@@ -117,6 +117,7 @@ zone (`settings.TIME_ZONE`) is used.
 | POST | `/auth/fcm-token/` | token + Firebase | Register device FCM token |
 | GET | `/me/` | token | Basic profile + program summary + `profile_complete` |
 | GET · PATCH | `/profile/` | token | "Mi perfil": sex, birth date, height, activity level |
+| POST | `/profile/photo/` | token | Upload / replace the profile photo (multipart `photo`) |
 | GET | `/home/` | token + active | Greeting, current metrics, weekly deltas, advisor WhatsApp |
 | GET | `/measurements/` | token | Measurement history (charts) |
 | POST | `/measurements/` | token + active | Save the day's measurement (upsert per date) |
@@ -242,11 +243,13 @@ client, is no longer listed and its detail answers `404`.
   "access_code": "ABCD2345",
   "program": { "status": "active", "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "program_finished": false,
-  "profile_complete": true
+  "profile_complete": true,
+  "photo_url": "https://media.example.com/media/client_area/profile_photos/image_3f2a9c.webp"
 }
 ```
 
 `profile_complete` is `false` while a value of `/profile/` is missing (the app asks for them).
+`photo_url` is the absolute URL of the profile photo, `null` without one.
 `program_finished` is `true` when access is `active` but no program runs (neither active nor
 scheduled). Once a program
 ends, access goes back to `none`, so the response has `access_status: "none"`, `program: null` and
@@ -317,6 +320,7 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
   "activity_level": null,
   "missing": ["activity_level"],
   "profile_complete": false,
+  "photo_url": null,
   "activity_levels": [
     { "value": 1, "label": "Sedentario", "description": "Poco o ningún ejercicio.", "multiplier": 1.2 },
     { "value": 2, "label": "Ligero", "description": "Ejercicio ligero 1–3 días por semana.", "multiplier": 1.375 },
@@ -326,6 +330,17 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
   ]
 }
 ```
+
+### POST /profile/photo/
+
+Multipart field `photo` (image). Token only; no active program required. The image is stored
+as webp (max width 1280 px, same pipeline as progress photos) on the default storage (R2 in
+production) and replaces the previous one, whose file is deleted.
+
+- **200** `{"photo_url": "https://media.example.com/media/client_area/profile_photos/image_3f2a9c.webp"}`
+- **400** `{"error": ...}`: no file, or the file is not a valid image.
+
+`photo_url` is also returned by `GET /me/` and `GET /profile/`.
 
 ### GET · POST /measurements/
 
@@ -503,7 +518,7 @@ advisor (ActivityContact + web push + inbox). Does **not** require active access
   "purchase_date": "2026-09-20",
   "access_status": "pending",
   "advisor_whatsapp_url": "https://wa.me/593999111222?text=...",
-  "whatsapp_message": "Hola, quiero continuar mi programa Conecta Fit. Pedido: ORD-42. Fecha de compra: 2026-09-20."
+  "whatsapp_message": "Hola, quiero continuar mi programa Impact Wellness. Pedido: ORD-42. Fecha de compra: 2026-09-20."
 }
 ```
 

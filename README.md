@@ -1,6 +1,6 @@
-# Conectafam Plus
+# Impact Tech
 
-Django 5.2 monolith powering **Conectafam Plus**, a network-marketing platform for distributors:
+Django 5.2 monolith powering **Impact Tech**, a network-marketing platform for distributors:
 team management, training, challenges, CRM, boards, landing pages, live streams, and
 subscription billing.
 
@@ -123,7 +123,7 @@ and consumed on the client by the modal lifecycle in `static/js/core.js`. CSRF i
 | [`pricing`](apps/pricing/README.md)             | `/pricing/`                    | No   | Stripe subscriptions, Customer Portal, webhooks, free trial cancellation              |
 | [`keyboard_api`](apps/keyboard_api/README.md)   | `/api/keyboard/`               | n/a  | Token-authenticated JSON API for the mobile keyboard client                           |
 | [`client_area`](apps/client_area/README.md)     | `/client-area/`                | Yes  | Advisor client area: profiles, programs, measurements, products, academy              |
-| [`client_api`](apps/client_api/README.md)       | `/api/client/`                 | n/a  | Token-authenticated JSON API for the Conecta Fit client app                           |
+| [`client_api`](apps/client_api/README.md)       | `/api/client/`                 | n/a  | Token-authenticated JSON API for the Impact Wellness client app                           |
 
 A `—` prefix means the app owns no URLConf. `core` has no `urls.py`: its handful of views are
 registered one by one at the site root in `Platform/urls.py` (`/sw.js`, `/share-preview/`,
@@ -148,12 +148,9 @@ The project is containerised across **three environments**, all defined by the s
 | Production        | `docker-compose.yml` (`NGINX_CONFIG=production`)                 | Gunicorn, 10 workers | `--scale celery-worker=5`, concurrency 10 |
 
 
-Two data-deployment models are supported: **Model A** runs `db` and `redis` as containers (the target
-architecture), while **Model B** (`docker-compose.host-services.yml`) keeps MySQL and Redis on the
-host during migration from the legacy systemd deployment.
+MySQL (`db`) and Redis (`redis`) run as containers in the same Compose project.
 
-> Full reference — architecture diagram, Nginx configuration, entrypoint behaviour, volumes, CI/CD,
-> and migration procedure: [`docs/docker.md`](docs/docker.md).
+> Full reference — architecture diagram, Nginx configuration, entrypoint behaviour, volumes, and CI/CD: [`docs/docker.md`](docs/docker.md).
 > Database backup and restore procedure: [`docs/backups.md`](docs/backups.md).
 
 
@@ -294,7 +291,7 @@ Workflow: [`.github/workflows/sync-docs.yml`](.github/workflows/sync-docs.yml).
 
 | Document                                                 | Contents                                                                                         |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [`docs/docker.md`](docs/docker.md)                       | Container architecture, three environments, Nginx, entrypoint, volumes, CI/CD, systemd migration |
+| [`docs/docker.md`](docs/docker.md)                       | Container architecture, three environments, Nginx, entrypoint, volumes, CI/CD |
 | [`docs/backups.md`](docs/backups.md)                     | Database backup and restore                                                                      |
 | [`docs/user-levels-cache.md`](docs/user-levels-cache.md) | Redis cache for `user_levels`: keys, TTL, invalidation, debugging                                |
 | [`CHANGELOG.md`](CHANGELOG.md)                           | Release history                                                                                  |
