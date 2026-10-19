@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.2.3](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.2.2...v5.2.3) (2026-10-19)
+
+
+### Bug Fixes
+
+* **challenges:** show per-option help in select tooltips ([#335](https://github.com/Anthony-JCG/conectafam-plus/issues/335)) ([7d587a8](https://github.com/Anthony-JCG/conectafam-plus/commit/7d587a827e19ca5c6533aa66f17505cdffab5257))
+* resolve Sentry errors (FCM onboarding gate, ApexCharts resize) ([#334](https://github.com/Anthony-JCG/conectafam-plus/issues/334)) ([7a6ebce](https://github.com/Anthony-JCG/conectafam-plus/commit/7a6ebce34f77c864781ae21b5b3fc4493ecda787))
+* **training:** unlock first steps for category owner ([#332](https://github.com/Anthony-JCG/conectafam-plus/issues/332)) ([f67a37a](https://github.com/Anthony-JCG/conectafam-plus/commit/f67a37a4ede61a6d4d1f864fc604c1d2e5841c72))
+
 ## [5.2.2](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.2.1...v5.2.2) (2026-10-10)
 
 
