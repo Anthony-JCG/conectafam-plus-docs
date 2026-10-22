@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.3.0...v5.3.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **links:** keep pro flag when editing a pro link ([#338](https://github.com/Anthony-JCG/conectafam-plus/issues/338)) ([b2771a2](https://github.com/Anthony-JCG/conectafam-plus/commit/b2771a2cab78372edde21730ab430101f02dc9ca))
+
 ## [5.3.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.2.3...v5.3.0) (2026-10-22)
 
 
