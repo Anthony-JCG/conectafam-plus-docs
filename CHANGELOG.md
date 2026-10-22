@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.2.3...v5.3.0) (2026-10-22)
+
+
+### Features
+
+* **links:** add url normalization in forms ([#336](https://github.com/Anthony-JCG/conectafam-plus/issues/336)) ([ec5fb2d](https://github.com/Anthony-JCG/conectafam-plus/commit/ec5fb2d1309c9ffde40de5ec0e0e1ec8ba2db483))
+
 ## [5.2.3](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.2.2...v5.2.3) (2026-10-19)
 
 
