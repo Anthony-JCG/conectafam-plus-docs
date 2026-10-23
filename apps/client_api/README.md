@@ -115,8 +115,12 @@ zone (`settings.TIME_ZONE`) is used.
 | POST | `/auth/token/refresh/` | token | Rotate token |
 | POST | `/auth/logout/` | token | Delete device token |
 | POST | `/auth/fcm-token/` | token + Firebase | Register device FCM token |
-| GET | `/me/` | token | Basic profile + program summary + `profile_complete` |
-| GET · PATCH | `/profile/` | token | "Mi perfil": sex, birth date, height, activity level |
+| GET | `/me/` | token | Basic profile + program summary + `profile_complete` + `onboarding_status` |
+| GET · PATCH | `/profile/` | token | "Mi perfil": sex, birth date, height, sport days, goal |
+| GET | `/onboarding/` | token | Initial test: status, questions, answers, recommendations |
+| PUT | `/onboarding/steps/1/` · `/onboarding/steps/2/` | token | Save test steps 1–2 (JSON) |
+| POST | `/onboarding/steps/3/` | token | Save test step 3 (multipart photos + measures) |
+| PUT | `/onboarding/feeling/` | token | Retake "Cómo te sientes" of a completed test |
 | GET | `/home/` | token + active | Greeting, current metrics, weekly deltas, advisor WhatsApp |
 | GET | `/measurements/` | token | Measurement history (charts) |
 | POST | `/measurements/` | token + active | Save the day's measurement (upsert per date) |
@@ -242,11 +246,15 @@ client, is no longer listed and its detail answers `404`.
   "access_code": "ABCD2345",
   "program": { "status": "active", "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "program_finished": false,
-  "profile_complete": true
+  "profile_complete": true,
+  "onboarding_status": "completed",
+  "advisor_whatsapp_url": "https://wa.me/593999111222"
 }
 ```
 
 `profile_complete` is `false` while a value of `/profile/` is missing (the app asks for them).
+`onboarding_status` is `pending` / `in_progress` / `completed` (see [Initial test](#initial-test-onboarding));
+`advisor_whatsapp_url` is `""` when the advisor has no phone.
 `program_finished` is `true` when access is `active` but no program runs (neither active nor
 scheduled). Once a program
 ends, access goes back to `none`, so the response has `access_status: "none"`, `program: null` and
@@ -264,10 +272,10 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
     "recorded_on": "2026-09-25",
     "weight": 72.0,
     "waist": 82.0,
-    "chest": null,
+    "abdomen": null,
     "hip": null,
-    "arm": null,
-    "leg": null,
+    "thigh": null,
+    "calf": null,
     "body_fat_pct": 20.0,
     "muscle_mass_kg": 31.0,
     "daily_kcal": 2150,
@@ -279,7 +287,7 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
     "source": "client",
     "created_at": "2026-09-25T18:00:00+00:00"
   },
-  "weekly_deltas": { "weight": -2.0, "waist": -2.0, "chest": null, "hip": null, "arm": null, "leg": null },
+  "weekly_deltas": { "weight": -2.0, "waist": -2.0, "abdomen": null, "hip": null, "thigh": null, "calf": null },
   "advisor_whatsapp_url": "https://wa.me/593999111222"
 }
 ```
@@ -292,9 +300,8 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
 
 "Mi perfil", asked on first launch (Guardar / Más tarde) and editable later. Token only.
 
-- **GET** → **200** the values, `missing` (the empty ones, in this order: `sex`, `birth_date`,
-  `height_cm`, `activity_level`; all of them feed the kcal formula), `profile_complete` and `activity_levels` (choices to
-  render, Spanish label and description).
+- **GET** → **200** the values, `goal` (free text), `missing` (the empty ones, in this order: `sex`,
+  `birth_date`, `height_cm`, `sport_days`; all of them feed the kcal formula) and `profile_complete`.
 - **PATCH** JSON, any subset; `null` clears a value → **200** same body. **400** `{"error": ...}`
   for a value out of range.
 
@@ -303,10 +310,11 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
 | `sex` | `male` / `female` (biological sex) |
 | `birth_date` | `YYYY-MM-DD`, age 10–120; stored on the advisor's contact (`Contact.date_of_birth`) |
 | `height_cm` | 100–250 |
-| `activity_level` | 1–5 (multipliers 1.2 / 1.375 / 1.55 / 1.725 / 1.9) |
+| `sport_days` | 0–7 sport days a week (multipliers: 0 → 1.2, 1–3 → 1.375, 4–5 → 1.55, 6–7 → 1.725) |
+| `goal` | free text (not used in calculations) |
 
 ```json
-{ "sex": "female", "birth_date": "1990-05-02", "height_cm": 165 }
+{ "sex": "female", "birth_date": "1990-05-02", "height_cm": 165, "sport_days": 4, "goal": "Tonificar" }
 ```
 
 ```json
@@ -314,18 +322,57 @@ ends, access goes back to `none`, so the response has `access_status: "none"`, `
   "sex": "female",
   "birth_date": "1990-05-02",
   "height_cm": 165.0,
-  "activity_level": null,
-  "missing": ["activity_level"],
-  "profile_complete": false,
-  "activity_levels": [
-    { "value": 1, "label": "Sedentario", "description": "Poco o ningún ejercicio.", "multiplier": 1.2 },
-    { "value": 2, "label": "Ligero", "description": "Ejercicio ligero 1–3 días por semana.", "multiplier": 1.375 },
-    { "value": 3, "label": "Moderado", "description": "Ejercicio moderado 3–5 días por semana.", "multiplier": 1.55 },
-    { "value": 4, "label": "Activo", "description": "Ejercicio intenso 6–7 días por semana.", "multiplier": 1.725 },
-    { "value": 5, "label": "Muy activo", "description": "Trabajo físico o entrenamiento dos veces al día.", "multiplier": 1.9 }
-  ]
+  "sport_days": null,
+  "goal": "Tonificar",
+  "missing": ["sport_days"],
+  "profile_complete": false
 }
 ```
+
+### Initial test: /onboarding/
+
+Mandatory for **every** client, existing ones included (no row = `pending`). Token only: it does
+not need active access. Every endpoint answers **200** with the same `Onboarding` body; **400**
+`{"error": ...}` for missing / invalid values, **401** without a token.
+
+| Method | Path | Body |
+|---|---|---|
+| GET | `/onboarding/` | — |
+| PUT | `/onboarding/steps/1/` | JSON, all required: `sex`, `birth_date`, `height_cm`, `goal` (free text), `sport_days` (0–7). Also accepted once completed ("Mi perfil" saves here, no new report) |
+| PUT | `/onboarding/steps/2/` | JSON: `scores` (one 1–10 integer per question, keys `"1"`…`"16"`), `has_pathologies` / `has_allergies` (booleans) and `pathologies` / `allergies` (text, required when true, cleared when false) |
+| POST | `/onboarding/steps/3/` | multipart: `front`, `side`, `back` (images) and `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (decimal text), optional `recorded_on`. Same upserts as `/photos/` and `/measurements/` |
+| PUT | `/onboarding/feeling/` | Retake from the profile, same body as step 2. **409** while the test is not completed |
+
+```json
+{
+  "status": "completed",
+  "steps": { "1": true, "2": true, "3": true },
+  "current_step": null,
+  "completed_at": "2026-10-22T19:00:00+00:00",
+  "questions": [{ "number": 1, "text": "¿Sientes que tienes energía durante todo el día?" }],
+  "answers": {
+    "sex": "female", "birth_date": "1990-05-02", "height_cm": 165.0, "goal": "Tonificar", "sport_days": 4,
+    "scores": { "1": 7, "2": 3 },
+    "has_pathologies": true, "pathologies": "Hipotiroidismo", "has_allergies": false, "allergies": ""
+  },
+  "recommendations": {
+    "whatsapp": ["Caffe Hongos", "Espirulina"],
+    "by_question": [{ "number": 3, "text": "¿Sientes muchas ganas de comer entre horas?", "score": 9, "products": ["Caffe Hongos", "Espirulina"] }],
+    "whatsapp_message": "Hola, he completado el cuestionario y la aplicación me ha recomendado:\n- Caffe Hongos\n- Espirulina"
+  },
+  "advisor_whatsapp_url": "https://wa.me/593999111222",
+  "whatsapp_url": "https://wa.me/593999111222?text=Hola%2C%20he%20completado..."
+}
+```
+
+- `status`: `pending` → `in_progress` (a step saved) → `completed` (the three steps). `current_step`
+  is the first step not done (`null` when all are).
+- A question recommends its products when its score is in its threshold: `low` 1–6, `high` 6–10
+  (questions and products are managed in the admin). `whatsapp` lists every product once;
+  `by_question` only the questions that recommend products. `recommendations` is `null` before step 2.
+- Only the last answers are kept. On completion and on every retake the advisor gets, in the
+  background, a text-only PDF of the answers by email (only the advisor), an `ActivityContact`
+  note and a web notification; the retake replaces the PDF.
 
 ### GET · POST /measurements/
 
@@ -336,7 +383,7 @@ updates it instead of adding a row.
 
 - **GET** → **200** `{"measurements": [Measurement, ...]}`, newest first.
   `?recorded_on=YYYY-MM-DD` returns only that day (`[]` or one row) to preload the form.
-- **POST** JSON upsert of `recorded_on`: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`,
+- **POST** JSON upsert of `recorded_on`: `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf`,
   the optional user values `body_fat_pct` (2–75, never calculated) and `muscle_mass_kg` (10–150, never calculated; it replaces
   `bioimpedance.muscle_mass_kg`), and `bioimpedance` (free-form extra readings). Only the keys sent change; `null` clears a value; `bioimpedance` is replaced
   whole. `recorded_on` may be at most the client's tomorrow (slack for a stale zone).
@@ -346,14 +393,15 @@ updates it instead of adding a row.
     notification; `source` keeps who created it).
   - **400** invalid JSON, bad / future `recorded_on`, or a non-numeric value.
 
-Second save of the day (`chest` was saved earlier and stays):
+Second save of the day (`abdomen` was saved earlier and stays). `chest` and `arm` are no longer
+sent nor accepted; old values are kept in the database:
 
 ```json
 { "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80 }
 ```
 
 ```json
-{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": null, "daily_kcal_source": null, "bmi": null, "bmi_category": null, "bmi_category_label": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
+{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "abdomen": 85.0, "hip": null, "thigh": null, "calf": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": null, "daily_kcal_source": null, "bmi": null, "bmi_category": null, "bmi_category_label": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
 ```
 
 #### Body composition
@@ -371,12 +419,12 @@ Calculated with `/profile/` and the row (`client_area.services.body`):
 
 | Value | Formula | Inputs |
 |---|---|---|
-| `daily_kcal` | Mifflin-St Jeor BMR (male `10W + 6.25H − 5A + 5`, female `… − 161`) × activity multiplier, rounded | row `weight`, age on the row's date, profile `height_cm`, `sex`, `activity_level` |
+| `daily_kcal` | Mifflin-St Jeor BMR (male `10W + 6.25H − 5A + 5`, female `… − 161`) × `sport_days` multiplier, rounded | row `weight`, age on the row's date, profile `height_cm`, `sex`, `sport_days` |
 | `bmi` | `weight / height_m²`, 1 decimal | row `weight`, profile `height_cm` |
 | `bmi_category` / `bmi_category_label` | From the rounded `bmi`: `< 18.5` `underweight` "Bajo peso", `< 25` `normal` "Peso normal", `< 30` `overweight` "Sobrepeso", else `obese` "Obesidad" | `bmi` |
 
 ```json
-{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "chest": null, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": 2712, "daily_kcal_source": "calc", "bmi": 24.7, "bmi_category": "normal", "bmi_category_label": "Peso normal", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
+{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "abdomen": null, "hip": null, "thigh": null, "calf": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": 2712, "daily_kcal_source": "calc", "bmi": 24.7, "bmi_category": "normal", "bmi_category_label": "Peso normal", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
 ```
 
 ### GET · POST /photos/

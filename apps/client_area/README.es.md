@@ -27,14 +27,16 @@ Relación con las apps núcleo:
 
 | Modelo | Relaciones y campos |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único, `access_status` (`none` / `pending` / `active` / `deactivated`) y `time_zone` (zona IANA del dispositivo, ver [Fechas locales](#fechas-locales)). "Mi perfil" de Conecta Fit: `sex` (`male` / `female`), `height_cm`, `activity_level` (1–5); la fecha de nacimiento es `contact.date_of_birth`. Solo API, no sale en el panel web. |
+| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único, `access_status` (`none` / `pending` / `active` / `deactivated`) y `time_zone` (zona IANA del dispositivo, ver [Fechas locales](#fechas-locales)). "Mi perfil" de Conecta Fit: `sex` (`male` / `female`), `height_cm`, `sport_days` (0–7), `goal` (texto libre); la fecha de nacimiento es `contact.date_of_birth`. Solo API, no sale en el panel web. |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`, `unlocked_through_day` (día del programa alcanzado en periodos anteriores). La fecha de fin se calcula (`start_date + duration_days`) y no se guarda. Se reutiliza en cada renovación. |
 | `ClientProgramEntry` | Fila de la tabla Programa: FK → asignación (`program_entries`); `assigned_on` (por defecto `timezone.localdate`). Ordenadas de más nueva a más antigua (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | Una celda: FK → fila (`files`); hueco `nutrition` / `sport` / `other`, único por fila; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
 | `ClientProduct` | FK → asignación; `recorded_on`, `products`, `observations`. Solo texto, sin elemento de board. |
 | `TrainingProgram` | Programa formativo: FK → asignación (`training_programs`); FK opcional → `boards.BoardFolder` (`template_folder`, `SET_NULL`: la plantilla de Videoteca que lee); `name`, `order` (secuencia de alta), `created_at`. Se listan de la más nueva a la más antigua (`-created_at`). Una carpeta de Academia. Una plantilla está como mucho una vez en la academia de un cliente (`training_program_assignment_template`). |
 | `ClientLesson` | FK → `TrainingProgram` (`lessons`); un elemento de academia, ordenado por `order`, `pk`. **Elemento propio**: `board_item` (contenido de YouTube), `text`, `attachment_item` (elemento PDF / imagen del board), `unlock_day`. **Elemento de plantilla**: FK → `BoardItem` (`template_item`, `CASCADE`) cuyo contenido lee; solo guarda lo que cambia para el cliente, `unlock_day` (`null` = el de la plantilla) y `hidden_by_advisor`. Una fila por programa y elemento de plantilla (`client_lesson_program_template_item`); `available_day` es el día efectivo. |
-| `ClientMeasurement` | FK → perfil; medidas, `body_fat_pct` / `muscle_mass_kg` opcionales del cliente (solo API) y `bioimpedance`; `source=client\|advisor` (quién la creó); `hidden_by_advisor`. Una fila por cliente y fecha (`client_measurement_profile_day`). |
+| `ClientOnboarding` | OneToOne → perfil (`onboarding`), se crea al guardar el primer paso. Test inicial de Conecta Fit: `status`, `step1_done` / `step2_done` / `step3_done`, las últimas `scores` (sin histórico), patologías / alergias, `recommendations`, `report_pdf` (PDF para el asesor, se sustituye al repetir), `completed_at`. Ver `services/onboarding.py` y el README de la API |
+| `FeelingQuestion` / `RecommendedProduct` | Preguntas de "Cómo te sientes" (`number`, `text`, `threshold` `low` 1–6 / `high` 6–10, M2M `products`) y productos (`name`, `image` / `url` opcionales; de momento solo se usa el nombre). Se gestionan en el admin; los carga `0023` |
+| `ClientMeasurement` | FK → perfil; medidas (`weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf`; `chest` / `arm` se conservan pero ya no se piden), `body_fat_pct` / `muscle_mass_kg` opcionales del cliente (solo API) y `bioimpedance`; `source=client\|advisor` (quién la creó); `hidden_by_advisor`. Una fila por cliente y fecha (`client_measurement_profile_day`). |
 | `ClientProgressPhoto` | FK → perfil; frente, espalda y lado; `source`; `hidden_by_advisor`. Una fila por cliente y fecha (`client_photo_profile_day`). `save()` pasa cada hueco por `core.utils.files.process_image_field_if_changed`, como los demás modelos con imágenes: WebP (calidad 80, máx. 1280 px) y, al sustituir un hueco, se borra su archivo anterior (celda web y API). |
 | `ClientAccessRequest` | FK → perfil; `kind` primer acceso o continuidad; `order_number` / `purchase_date` opcionales. |
 
@@ -126,7 +128,7 @@ zonas distintas. Nunca `date.today()`:
 - Cada hueco de foto muestra su miniatura o un "+"; al pulsar cualquiera de los dos se sube (o se
   cambia) la foto.
 - **Gráfica de Evolución**, debajo de la tabla de medidas: una línea por columna
-  (`build_measurement_chart`: Peso, Pecho, Brazo, Cadera, Cintura, Pierna, con los nombres de
+  (`build_measurement_chart`: Peso, Cintura, Abdomen, Cadera/glúteos, Muslo, Pantorrilla, con los nombres de
   `ClientMeasurementForm`; solo filas visibles y sin las celdas vacías). `client_area_tools.js` pide
   su JSON (`client_area_measurement_chart`) y la dibuja con ApexCharts (CDN, cargado en
   `contacts.html` como las estadísticas mensuales de la home). Desde / Hasta son `<select>` con los
@@ -240,6 +242,8 @@ modo para toda la academia. La copia desde otro cliente conserva la disponibilid
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
 | `services/pane.py` | Contexto del panel, `build_catalog_context`, `build_measurement_chart` (series de la gráfica + `dates`), `build_photo_compare`, URLs de WhatsApp |
+| `services/onboarding.py` | Test inicial: guardado por pasos, `parse_feeling`, `build_recommendations`, `whatsapp_message`, `retake_feeling` |
+| `services/onboarding_report.py` | PDF para el asesor (PyMuPDF, solo texto), correo con el adjunto, `ActivityContact` + notificación web (`report_onboarding_task`) |
 | `services/inbox.py` | `pending_access_requests_for_advisor` (de la más reciente a la más antigua, con contacto, URL de WhatsApp y antigüedad) para el bloque del home; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
 | `services/expiry.py` | Expiración horaria y `pause_programs_without_entitlement` |
 
@@ -376,7 +380,10 @@ Prefijo de URL: **`/client-area/`**
   confirmar.
 - **Acceso** — código de acceso con copiar, aceptar solicitud (fecha de inicio y duración, ver
   arriba), activar/desactivar el acceso, enlace
-  de WhatsApp y badges de App Store / Play Store (provisionales).
+  de WhatsApp, **Ver respuestas de cliente** (PDF del test inicial, `client_area_onboarding_report`,
+  con permiso del add-on y contacto propio; se abre con `pdf-document-viewer.js` / PDF.js, sin
+  descargar, y queda deshabilitado hasta que exista el informe) y badges de App Store / Play Store
+  (provisionales).
 - **Evolución / Fotos** — con scroll horizontal y edición en la propia tabla (ver *Tablas Evolución
   / Fotos*); Evolución tiene además su gráfica con selects Desde / Hasta; Fotos tiene **Comparar
   fotos**. Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`:
@@ -463,6 +470,8 @@ del contacto, qué pide (acceso, o continuar el programa con el número de pedid
 | `0019_academy_templates` | Añade `TrainingProgram.template_folder` y `ClientLesson.template_item` / `hidden_by_advisor`; `ClientLesson.unlock_day` pasa a admitir vacío (necesita la `0013` de `boards`) |
 | `0020_academy_plans_to_videoteca` | Datos (modelos históricos), ver abajo |
 | `0021_remove_academy_plans` | Elimina `ClientLesson.source_item`, `TrainingProgram.source_plan`, `AcademyPlanItem` y `AcademyPlan`; añade las restricciones únicas de plantillas |
+| `0022_client_onboarding` | **Rompe compatibilidad:** elimina `ClientProfile.activity_level` (no se convierte) y añade `sport_days` / `goal`; renombra `ClientMeasurement.leg` → `thigh` (conserva datos) y añade `abdomen` / `calf`; crea `RecommendedProduct`, `FeelingQuestion` y `ClientOnboarding` |
+| `0023_load_feeling_questions` | Datos: las 16 preguntas y sus productos (`Recomendaciones.txt`); el reverse las borra |
 
 La `0020` convierte las plantillas antiguas en plantillas de Videoteca:
 

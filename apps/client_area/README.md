@@ -26,14 +26,16 @@ Relationship to the core apps:
 
 | Model | Relationships and fields |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. Unique `access_code`, `access_status` (`none` / `pending` / `active` / `deactivated`), `time_zone` (device IANA zone, see [Local dates](#local-dates)). Conecta Fit "Mi perfil": `sex` (`male` / `female`), `height_cm`, `activity_level` (1–5); the birth date is `contact.date_of_birth`. API only, not in the web pane. |
+| `ClientProfile` | OneToOne → `communication.Contact`. Unique `access_code`, `access_status` (`none` / `pending` / `active` / `deactivated`), `time_zone` (device IANA zone, see [Local dates](#local-dates)). Conecta Fit "Mi perfil": `sex` (`male` / `female`), `height_cm`, `sport_days` (0–7), `goal` (free text); the birth date is `contact.date_of_birth`. API only, not in the web pane. |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`, `unlocked_through_day` (program day reached in previous periods). The end date is derived (`start_date + duration_days`), never stored. Reused on every renewal. |
 | `ClientProgramEntry` | Row of the Programa table: FK → assignment (`program_entries`); `assigned_on` (defaults to `timezone.localdate`). Ordered newest first (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | One cell: FK → entry (`files`); slot `nutrition` / `sport` / `other`, unique per entry; FK → `BoardItem` (the file; uploads become board items). |
 | `ClientProduct` | FK → assignment; `recorded_on`, `products`, `observations`. Plain text, no board item. |
 | `TrainingProgram` | Programa formativo: FK → assignment (`training_programs`); optional FK → `boards.BoardFolder` (`template_folder`, `SET_NULL`: the Videoteca template it reads); `name`, `order` (create sequence), `created_at`. Listed newest first (`-created_at`). One Academia folder. A template is in a client's academy at most once (`training_program_assignment_template`). |
 | `ClientLesson` | FK → `TrainingProgram` (`lessons`); one academy element, ordered by `order`, `pk`. **Own element**: `board_item` (YouTube content), `text`, `attachment_item` (PDF / image board item), `unlock_day`. **Template element**: FK → `BoardItem` (`template_item`, `CASCADE`) whose content it reads; it only stores the client's overrides, `unlock_day` (`null` = the template's) and `hidden_by_advisor`. One row per program and template item (`client_lesson_program_template_item`); `available_day` is the effective day. |
-| `ClientMeasurement` | FK → profile; body metrics, the client's optional `body_fat_pct` / `muscle_mass_kg` (API only) and `bioimpedance`; `source=client\|advisor` (who created it); `hidden_by_advisor`. One row per client and date (`client_measurement_profile_day`). |
+| `ClientOnboarding` | OneToOne → profile (`onboarding`), created on the first saved step. Conecta Fit initial test: `status`, `step1_done` / `step2_done` / `step3_done`, the last `scores` (no history), pathologies / allergies, `recommendations`, `report_pdf` (advisor PDF, replaced on retake), `completed_at`. See `services/onboarding.py` and the client API README |
+| `FeelingQuestion` / `RecommendedProduct` | The "Cómo te sientes" questions (`number`, `text`, `threshold` `low` 1–6 / `high` 6–10, M2M `products`) and products (`name`, optional `image` / `url`; only the name is used for now). Managed in the admin; loaded by `0023` |
+| `ClientMeasurement` | FK → profile; body metrics (`weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf`; `chest` / `arm` are kept but no longer asked), the client's optional `body_fat_pct` / `muscle_mass_kg` (API only) and `bioimpedance`; `source=client\|advisor` (who created it); `hidden_by_advisor`. One row per client and date (`client_measurement_profile_day`). |
 | `ClientProgressPhoto` | FK → profile; front/back/side; `source`; `hidden_by_advisor`. One row per client and date (`client_photo_profile_day`). `save()` runs `core.utils.files.process_image_field_if_changed` on each slot like the other image models: WebP (quality 80, max 1280 px) and a replaced slot deletes its previous file (web cell and API). |
 | `ClientAccessRequest` | FK → profile; `kind` first access / continuity; optional `order_number` / `purchase_date`. |
 
@@ -117,7 +119,7 @@ Never `date.today()`:
   table (the rows are reordered), so it replaces the table, not the cell.
 - Photo slots show their thumbnail or a "+"; clicking either uploads (or replaces) the slot.
 - **Evolución chart** below the measurements table: one line per column (`build_measurement_chart`:
-  Peso, Pecho, Brazo, Cadera, Cintura, Pierna, named from `ClientMeasurementForm` labels; visible
+  Peso, Cintura, Abdomen, Cadera/glúteos, Muslo, Pantorrilla, named from `ClientMeasurementForm` labels; visible
   rows only, empty cells skipped). `client_area_tools.js` fetches its JSON
   (`client_area_measurement_chart`) and draws it with ApexCharts (CDN, loaded by `contacts.html`
   like the home's monthly stats). Desde / Hasta are `<select>`s of the days that have a measurement
@@ -224,6 +226,8 @@ mode. Copy-from-client keeps each element's availability.
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Advisor's client-area boards and catalog search |
 | `services/pane.py` | Tools pane context, `build_catalog_context`, `build_measurement_chart` (Evolución chart series + `dates`), `build_photo_compare`, WhatsApp URLs |
+| `services/onboarding.py` | Initial test: step saving, `parse_feeling`, `build_recommendations`, `whatsapp_message`, `retake_feeling` |
+| `services/onboarding_report.py` | Advisor PDF (PyMuPDF, text only), email with it attached, `ActivityContact` + web notification (`report_onboarding_task`) |
 | `services/inbox.py` | `pending_access_requests_for_advisor` (newest first, with contact, WhatsApp URL and age) for the home block; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
 | `services/expiry.py` | Hourly expiry and `pause_programs_without_entitlement` |
 
@@ -354,7 +358,9 @@ URL prefix: **`/client-area/`**
   `#globalConfirmModal` (`openGlobalConfirmModal`, `static/js/global_confirm.js`) instead of the
   browser dialog: an `htmx:confirm` listener in `client_area_tools.js` issues the request on confirm.
 - **Access** — access code with copy, accept request (start date and duration, see above),
-  activate/deactivate access, WhatsApp link,
+  activate/deactivate access, WhatsApp link, **Ver respuestas de cliente** (the initial test PDF,
+  `client_area_onboarding_report`, entitlement + owned contact, opened inline with
+  `pdf-document-viewer.js` / PDF.js, never downloaded; disabled until a report exists),
   App Store / Play Store badges (placeholders).
 - **Evolución / Fotos** — horizontal scroll, edited inline (see *Evolución / Fotos tables*);
   Evolución also has its chart with Desde / Hasta day selects; Fotos has **Comparar fotos**.
@@ -438,6 +444,8 @@ horas"), a WhatsApp button and **Admitir**.
 | `0019_academy_templates` | Adds `TrainingProgram.template_folder`, `ClientLesson.template_item` / `hidden_by_advisor`; `ClientLesson.unlock_day` becomes nullable (needs `boards` `0013`) |
 | `0020_academy_plans_to_videoteca` | Data (historical models), see below |
 | `0021_remove_academy_plans` | Drops `ClientLesson.source_item`, `TrainingProgram.source_plan`, `AcademyPlanItem` and `AcademyPlan`; adds the template unique constraints |
+| `0022_client_onboarding` | **Breaking:** drops `ClientProfile.activity_level` (not converted) and adds `sport_days` / `goal`; renames `ClientMeasurement.leg` → `thigh` (data kept) and adds `abdomen` / `calf`; creates `RecommendedProduct`, `FeelingQuestion` and `ClientOnboarding` |
+| `0023_load_feeling_questions` | Data: the 16 questions and their products (`Recomendaciones.txt`); reverse deletes them |
 
 `0020` turns the plantillas into Videoteca templates:
 

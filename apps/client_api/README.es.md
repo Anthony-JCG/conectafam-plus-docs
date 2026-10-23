@@ -116,8 +116,12 @@ Sin ella se usa la zona del servidor (`settings.TIME_ZONE`).
 | POST | `/auth/token/refresh/` | token | Rotar el token |
 | POST | `/auth/logout/` | token | Borrar el token del dispositivo |
 | POST | `/auth/fcm-token/` | token + Firebase | Registrar el token FCM del dispositivo |
-| GET | `/me/` | token | Perfil básico + resumen del programa + `profile_complete` |
-| GET · PATCH | `/profile/` | token | "Mi perfil": sexo, fecha de nacimiento, altura, nivel de actividad |
+| GET | `/me/` | token | Perfil básico + resumen del programa + `profile_complete` + `onboarding_status` |
+| GET · PATCH | `/profile/` | token | "Mi perfil": sexo, fecha de nacimiento, altura, días de deporte, objetivo |
+| GET | `/onboarding/` | token | Test inicial: estado, preguntas, respuestas, recomendaciones |
+| PUT | `/onboarding/steps/1/` · `/onboarding/steps/2/` | token | Guarda los pasos 1–2 del test (JSON) |
+| POST | `/onboarding/steps/3/` | token | Guarda el paso 3 (fotos y medidas en multipart) |
+| PUT | `/onboarding/feeling/` | token | Repite "Cómo te sientes" de un test completado |
 | GET | `/home/` | token + activo | Saludo, métricas actuales, deltas semanales, WhatsApp del asesor |
 | GET | `/measurements/` | token | Historial de medidas (gráficas) |
 | POST | `/measurements/` | token + activo | Guarda la medida del día (upsert por fecha) |
@@ -245,11 +249,15 @@ plantilla, o que se oculta a este cliente, deja de listarse y su detalle respond
   "access_code": "ABCD2345",
   "program": { "status": "active", "day": 10, "start_date": "2026-09-02", "duration_days": 90, "end_date": "2026-12-01", "progress_percent": 11, "days_remaining": 80, "is_active": true },
   "program_finished": false,
-  "profile_complete": true
+  "profile_complete": true,
+  "onboarding_status": "completed",
+  "advisor_whatsapp_url": "https://wa.me/593999111222"
 }
 ```
 
 `profile_complete` es `false` mientras falte algún dato de `/profile/` (la app los pide).
+`onboarding_status` es `pending` / `in_progress` / `completed` (ver [Test inicial](#test-inicial-onboarding));
+`advisor_whatsapp_url` es `""` si el asesor no tiene teléfono.
 `program_finished` es `true` cuando el acceso está `active` pero no hay programa en curso (ni activo
 ni programado). Cuando un
 programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_status: "none"`,
@@ -267,10 +275,10 @@ programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_
     "recorded_on": "2026-09-25",
     "weight": 72.0,
     "waist": 82.0,
-    "chest": null,
+    "abdomen": null,
     "hip": null,
-    "arm": null,
-    "leg": null,
+    "thigh": null,
+    "calf": null,
     "body_fat_pct": 20.0,
     "muscle_mass_kg": 31.0,
     "daily_kcal": 2150,
@@ -282,7 +290,7 @@ programa termina, el acceso vuelve a `none`, así que la respuesta trae `access_
     "source": "client",
     "created_at": "2026-09-25T18:00:00+00:00"
   },
-  "weekly_deltas": { "weight": -2.0, "waist": -2.0, "chest": null, "hip": null, "arm": null, "leg": null },
+  "weekly_deltas": { "weight": -2.0, "waist": -2.0, "abdomen": null, "hip": null, "thigh": null, "calf": null },
   "advisor_whatsapp_url": "https://wa.me/593999111222"
 }
 ```
@@ -296,9 +304,8 @@ si hay menos de dos). `current` trae la composición corporal de esa fila (ver
 "Mi perfil", que se pide en el primer arranque (Guardar / Más tarde) y se puede editar después. Solo
 token.
 
-- **GET** → **200** los valores, `missing` (los vacíos, en este orden: `sex`, `birth_date`,
-  `height_cm`, `activity_level`; todos los usa la fórmula de kcal), `profile_complete` y `activity_levels` (opciones para
-  pintar, con etiqueta y descripción en español).
+- **GET** → **200** los valores, `goal` (texto libre), `missing` (los vacíos, en este orden: `sex`,
+  `birth_date`, `height_cm`, `sport_days`; todos los usa la fórmula de kcal) y `profile_complete`.
 - **PATCH** JSON, cualquier subconjunto; `null` borra un valor → **200** el mismo cuerpo. **400**
   `{"error": ...}` si un valor está fuera de rango.
 
@@ -307,10 +314,11 @@ token.
 | `sex` | `male` / `female` (sexo biológico) |
 | `birth_date` | `YYYY-MM-DD`, edad 10–120; se guarda en el contacto del asesor (`Contact.date_of_birth`) |
 | `height_cm` | 100–250 |
-| `activity_level` | 1–5 (multiplicadores 1.2 / 1.375 / 1.55 / 1.725 / 1.9) |
+| `sport_days` | 0–7 días de deporte por semana (multiplicadores: 0 → 1.2, 1–3 → 1.375, 4–5 → 1.55, 6–7 → 1.725) |
+| `goal` | texto libre (no entra en los cálculos) |
 
 ```json
-{ "sex": "female", "birth_date": "1990-05-02", "height_cm": 165 }
+{ "sex": "female", "birth_date": "1990-05-02", "height_cm": 165, "sport_days": 4, "goal": "Tonificar" }
 ```
 
 ```json
@@ -318,18 +326,39 @@ token.
   "sex": "female",
   "birth_date": "1990-05-02",
   "height_cm": 165.0,
-  "activity_level": null,
-  "missing": ["activity_level"],
-  "profile_complete": false,
-  "activity_levels": [
-    { "value": 1, "label": "Sedentario", "description": "Poco o ningún ejercicio.", "multiplier": 1.2 },
-    { "value": 2, "label": "Ligero", "description": "Ejercicio ligero 1–3 días por semana.", "multiplier": 1.375 },
-    { "value": 3, "label": "Moderado", "description": "Ejercicio moderado 3–5 días por semana.", "multiplier": 1.55 },
-    { "value": 4, "label": "Activo", "description": "Ejercicio intenso 6–7 días por semana.", "multiplier": 1.725 },
-    { "value": 5, "label": "Muy activo", "description": "Trabajo físico o entrenamiento dos veces al día.", "multiplier": 1.9 }
-  ]
+  "sport_days": null,
+  "goal": "Tonificar",
+  "missing": ["sport_days"],
+  "profile_complete": false
 }
 ```
+
+### Test inicial: /onboarding/
+
+Obligatorio para **todos** los clientes, también los existentes (sin fila = `pending`). Solo token:
+no necesita acceso activo. Todos los endpoints responden **200** con el mismo cuerpo `Onboarding`;
+**400** `{"error": ...}` si faltan valores o no son válidos, **401** sin token.
+
+| Método | Ruta | Cuerpo |
+|---|---|---|
+| GET | `/onboarding/` | — |
+| PUT | `/onboarding/steps/1/` | JSON, todo obligatorio: `sex`, `birth_date`, `height_cm`, `goal` (texto libre), `sport_days` (0–7). También se acepta con el test completado ("Mi perfil" guarda por aquí, sin nuevo informe) |
+| PUT | `/onboarding/steps/2/` | JSON: `scores` (un entero 1–10 por pregunta, claves `"1"`…`"16"`), `has_pathologies` / `has_allergies` (booleanos) y `pathologies` / `allergies` (texto, obligatorio si es true, se vacía si es false) |
+| POST | `/onboarding/steps/3/` | multipart: `front`, `side`, `back` (imágenes) y `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (texto decimal), `recorded_on` opcional. Mismos upserts que `/photos/` y `/measurements/` |
+| PUT | `/onboarding/feeling/` | Repetir "Cómo te sientes" desde el perfil, mismo cuerpo que el paso 2. **409** si el test no está completado |
+
+El cuerpo `Onboarding` es el del README en inglés (`status`, `steps`, `current_step`,
+`completed_at`, `questions`, `answers` plano, `recommendations` con `whatsapp`, `by_question` y
+`whatsapp_message`, `advisor_whatsapp_url` y `whatsapp_url` con el mensaje en `?text=`).
+
+- `status`: `pending` → `in_progress` (un paso guardado) → `completed` (los tres pasos).
+  `current_step` es el primer paso pendiente (`null` si no queda ninguno).
+- Una pregunta recomienda sus productos si su puntuación cae en su umbral: `low` 1–6, `high` 6–10
+  (preguntas y productos se gestionan en el admin). `whatsapp` lista cada producto una vez;
+  `by_question` solo las preguntas que recomiendan productos. `recommendations` es `null` antes del paso 2.
+- Solo se guardan las últimas respuestas. Al completar y en cada repetición el asesor recibe, en
+  segundo plano, un PDF de solo texto con las respuestas por correo (solo él), una nota en
+  `ActivityContact` y una notificación web; la repetición sustituye el PDF.
 
 ### GET · POST /measurements/
 
@@ -340,7 +369,7 @@ otra vez el mismo día lo actualiza en lugar de añadir una fila.
 
 - **GET** → **200** `{"measurements": [Measurement, ...]}`, de la más reciente a la más antigua.
   `?recorded_on=YYYY-MM-DD` devuelve solo ese día (`[]` o una fila) para precargar el formulario.
-- **POST** JSON, upsert del `recorded_on`: `weight`, `waist`, `chest`, `hip`, `arm`, `leg`,
+- **POST** JSON, upsert del `recorded_on`: `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf`,
   los valores opcionales del usuario `body_fat_pct` (2–75, nunca se calcula) y `muscle_mass_kg` (10–150, nunca se calcula; sustituye a
   `bioimpedance.muscle_mass_kg`), y `bioimpedance` (otras lecturas, formato libre). Solo cambian las claves enviadas; `null` borra un valor; `bioimpedance` se
   reemplaza entero. `recorded_on` puede ser como mucho el mañana del cliente (margen por si la zona
@@ -351,14 +380,15 @@ otra vez el mismo día lo actualiza en lugar de añadir una fila.
     notificación; `source` sigue diciendo quién lo creó).
   - **400** JSON no válido, `recorded_on` mal formado o futuro, o un valor no numérico.
 
-Segundo guardado del día (`chest` ya estaba guardado y se mantiene):
+Segundo guardado del día (`abdomen` ya estaba guardado y se mantiene). `chest` y `arm` ya no se
+envían ni se aceptan; los valores antiguos se conservan en la base de datos:
 
 ```json
 { "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80 }
 ```
 
 ```json
-{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "chest": 95.0, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": null, "daily_kcal_source": null, "bmi": null, "bmi_category": null, "bmi_category_label": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
+{ "measurement": { "id": 12, "recorded_on": "2026-10-01", "weight": 69.9, "waist": 80.0, "abdomen": 85.0, "hip": null, "thigh": null, "calf": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": null, "daily_kcal_source": null, "bmi": null, "bmi_category": null, "bmi_category_label": null, "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }, "created": false }
 ```
 
 #### Composición corporal
@@ -376,12 +406,12 @@ Se calcula con `/profile/` y la fila (`client_area.services.body`):
 
 | Valor | Fórmula | Datos |
 |---|---|---|
-| `daily_kcal` | TMB de Mifflin-St Jeor (hombre `10P + 6.25A − 5E + 5`, mujer `… − 161`) × multiplicador de actividad, redondeado | `weight` de la fila, edad en la fecha de la fila, `height_cm`, `sex` y `activity_level` del perfil |
+| `daily_kcal` | TMB de Mifflin-St Jeor (hombre `10P + 6.25A − 5E + 5`, mujer `… − 161`) × multiplicador de `sport_days`, redondeado | `weight` de la fila, edad en la fecha de la fila, `height_cm`, `sex` y `sport_days` del perfil |
 | `bmi` | `peso / altura_m²`, 1 decimal | `weight` de la fila, `height_cm` del perfil |
 | `bmi_category` / `bmi_category_label` | Según el `bmi` redondeado: `< 18.5` `underweight` "Bajo peso", `< 25` `normal` "Peso normal", `< 30` `overweight` "Sobrepeso", si no `obese` "Obesidad" | `bmi` |
 
 ```json
-{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "chest": null, "hip": null, "arm": null, "leg": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": 2712, "daily_kcal_source": "calc", "bmi": 24.7, "bmi_category": "normal", "bmi_category_label": "Peso normal", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
+{ "id": 12, "recorded_on": "2026-10-01", "weight": 80.0, "waist": 90.0, "abdomen": null, "hip": null, "thigh": null, "calf": null, "body_fat_pct": null, "muscle_mass_kg": null, "daily_kcal": 2712, "daily_kcal_source": "calc", "bmi": 24.7, "bmi_category": "normal", "bmi_category_label": "Peso normal", "bioimpedance": {}, "source": "client", "created_at": "2026-10-01T13:00:00+00:00" }
 ```
 
 ### GET · POST /photos/
