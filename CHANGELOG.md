@@ -1,5 +1,19 @@
 # Changelog
 
+## [6.0.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.3.1...v6.0.0) (2026-10-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **client-area:** /api/client/profile/ drops activity_level and activity_levels; measurements drop chest, arm and leg for abdomen, thigh and calf.
+
+### Features
+
+* **client-api:** make onboarding step 3 photos optional ([4a0aea3](https://github.com/Anthony-JCG/conectafam-plus/commit/4a0aea369ca7957a27ee8cf984828c780056958d))
+* **client-api:** make onboarding step 3 photos optional ([7c51ffb](https://github.com/Anthony-JCG/conectafam-plus/commit/7c51ffb4c20daea836582a760e12017e2fe460e0))
+* **client-area:** Conecta Fit client onboarding ([#340](https://github.com/Anthony-JCG/conectafam-plus/issues/340)) ([1cbe44c](https://github.com/Anthony-JCG/conectafam-plus/commit/1cbe44c2ca1eb28e5fc1641963e3e120d3b8f012))
+* **client-area:** update app links to open in new tab ([047feca](https://github.com/Anthony-JCG/conectafam-plus/commit/047fecaf7e64f495dc8a09b1e2bcdae117ec91c9))
+
 ## [5.3.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.3.0...v5.3.1) (2026-10-22)
 
 
