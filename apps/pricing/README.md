@@ -29,12 +29,11 @@ OneToOne → `users.User`. Local mirror of the active Stripe subscription: subsc
 status, and period boundaries. Written by `upsert_subscription_record` and `mark_subscription_deleted`.
 Tracks the **plan** subscription only; add-on subscriptions never touch it.
 
-### Add-ons: `Addon`, `AddonPrice`, `UserAddon`
+### Add-ons: `Addon`, `UserAddon`
 
 | Model | Purpose |
 |---|---|
-| `Addon` | Catalog entry. `code` matches the Stripe product metadata `addon_code`. `capability_model_key` + `capability_action` name the `user_levels` capability that already includes the tool (no charge for those levels). `is_active` = on sale. |
-| `AddonPrice` | Monthly Stripe price per `(addon, level)`. A level without a row cannot buy the add-on. |
+| `Addon` | Catalog entry. `code` matches the Stripe product metadata `addon_code`. `capability_model_key` + `capability_action` name the `user_levels` capability that already includes the tool (no charge for those levels). `is_active` = on sale. `description` / `advantages` fill the card on the pricing page; `pricing_title` overrides `name` there only (e.g. *Conecta Fit* for `client_area`). One price for every level that has to buy it: `id_monthly_price_stripe` / `id_yearly_price_stripe` (display fallback `monthly_price` / `yearly_price`). |
 | `UserAddon` | Purchase state per `(user, addon)`: `is_active`, `stripe_subscription_id`, `stripe_item_id`. Written only from Stripe webhooks and reconciliation. |
 
 Prices live in the database (admin → *Add-ons*), like plan prices on `Level`, so each environment
@@ -97,9 +96,9 @@ URL prefix: **`/pricing/`**
 
 | URL | View | Response |
 |---|---|---|
-| `""` | `pricing_page` | Plan listing (HTML) |
+| `""` | `pricing_page` | Pro and Leader cards plus active add-ons (HTML); an add-on the user owns or whose level includes it shows a disabled *Adquirido* button |
 | `checkout/<level_code>/<period>/` | `create_checkout` | 303 redirect to Stripe Checkout, or to the Customer Portal when a subscription is already active |
-| `addon/<addon_code>/checkout/` | `create_addon_checkout` | POST (`next` = return path): Checkout of the add-on as its own subscription at the user's level price; redirects to `next` if already entitled, already subscribed in Stripe (`has_running_addon_subscription`) or no price exists |
+| `addon/<addon_code>/checkout/<period>/` | `create_addon_checkout` | POST (`next` = return path): Checkout of the add-on as its own subscription at its monthly or yearly price; redirects to `next` if already entitled, already subscribed in Stripe (`has_running_addon_subscription`) or no price exists |
 | `checkout/success/` · `checkout/cancel/` | `checkout_success`, `checkout_cancel` | Post-checkout pages |
 | `portal/` | `customer_portal` | Redirect to a fresh Customer Portal session |
 | `webhook/` | `stripe_webhook` | Signature-verified webhook receiver (`HttpResponse` 200/4xx/5xx) |
@@ -141,20 +140,23 @@ and a yearly price. Every product **must** carry the metadata key `level_code` w
 platform level.
 
 **Add-ons** — one Stripe product per add-on, **no** `level_code`, metadata `addon_code=<code>`,
-with one monthly price per level that can buy it. Register each price in the admin as an
-`AddonPrice`.
+with one monthly and one yearly price. Set both price IDs on the `Addon` in the admin.
 
+- **Existing subscriptions on an old price** (e.g. the former per-level prices) keep it until their next
+  invoice. After setting the add-on price IDs, run `python manage.py move_addons_to_current_price` once:
+  it switches each item to the monthly price with `proration_behavior=none`, so the current period stays
+  as billed and the new price applies from the next renewal. Items already on the monthly or yearly price
+  are skipped, so it is safe to run again.
 - **Always its own subscription.** The Customer Portal cannot change plans on multi-product
   subscriptions, and monthly add-ons cannot share a yearly plan subscription, so the plan
   subscription stays single-product.
-- **Checkout** uses `get_addon_price_id(addon, user.level_code)`. The webhook **does not** change
+- **Checkout** uses `addon.get_price_id(period)`. The webhook **does not** change
   `Level`; it only writes `UserAddon`. `has_active_stripe_subscription` ignores add-on subscriptions.
 - **Level changes** (plan webhook, trial expiry, admin) fire `pricing.signals`, which queues
   `reconcile_user_addons`. Billing changes always take effect at the **next renewal**, with no
-  credits or immediate charges: a different level price is scheduled with `proration_behavior=none`,
-  and if the new level's capability already includes the add-on the subscription is set to
-  `cancel_at_period_end` (access continues until then; the capability covers it after that). With
-  no price for the new level, the subscription is left unchanged and a warning is logged.
+  credits or immediate charges: if the new level's capability already includes the add-on the
+  subscription is set to `cancel_at_period_end` (access continues until then; the capability covers
+  it after that), and if it no longer does, a pending cancellation is undone.
 - Users with any add-on can open the Customer Portal to cancel it, even on Basic.
 
 **Independence rule.** Plans and add-ons are separate Stripe subscriptions with separate
@@ -164,14 +166,14 @@ handlers:
 |---|---|
 | Add-on bought, renewed, cancelled, or deleted | None: `Level`, `StripeSubscriptionRecord`, trial, and plan emails stay untouched (`sync_addon_subscription`, `_handle_addon_subscription_updated` / `_deleted`) |
 | Plan checkout / portal / `has_active_stripe_subscription` / `subscription_status` | Only the subscription with a `level_code` item counts; add-on subscriptions are ignored |
-| Level changes (plan webhook, trial expiry, admin) | Add-on billing changes at the **next period** only (`reconcile_user_addons`): new price with no proration, or `cancel_at_period_end` when the level already includes the tool. No credits or mid-cycle charges |
+| Level changes (plan webhook, trial expiry, admin) | Add-on billing changes at the **next period** only (`reconcile_user_addons`): `cancel_at_period_end` when the level already includes the tool, resumed when it no longer does. No credits or mid-cycle charges |
 
 **Adding a new add-on:**
 
-1. Stripe: create the product with `addon_code=<code>` and one monthly price per level.
+1. Stripe: create the product with `addon_code=<code>` and a monthly and a yearly price.
 2. `user_levels`: add the capability that includes it on the higher levels (`DEFAULT_LEVELS` +
    data migration), e.g. `{"<model_key>": {"access": {"allowed": true}}}`.
-3. Admin → *Add-ons*: create the `Addon` (code, name, capability) and its `AddonPrice` rows.
+3. Admin → *Add-ons*: create the `Addon` (code, name, description, advantages, capability, price IDs).
 4. Feature app: gate the UI with the capability **or** `user_has_addon(user, "<code>")`.
 5. Lock screen: seed a `RestrictedAccessAlert` with key `<code>_addon`. `pro-locked-content.html`
    then renders the "Adquirir Herramienta" button posting to `create_addon_checkout`.

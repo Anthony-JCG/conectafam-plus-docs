@@ -304,7 +304,7 @@ downgrade flow).
 
 **This app uses HTMX.** `#pane-cliente` in the contact modal loads `load_client_area_pane`. Basic/Pro
 users without the add-on see `RestrictedAccessAlert` `client_area_addon`, whose button posts to
-`pricing.create_addon_checkout` with `client_area`.
+`pricing.create_addon_checkout` with `client_area` and `monthly` (Stripe Checkout).
 
 URL prefix: **`/client-area/`**
 

@@ -323,7 +323,7 @@ con el flujo global de bajada de nivel).
 
 **Esta app usa HTMX.** `#pane-cliente`, en el modal de contacto, carga `load_client_area_pane`. Los
 usuarios Basic/Pro sin el add-on ven `RestrictedAccessAlert` `client_area_addon`, cuyo botón hace
-POST a `pricing.create_addon_checkout` con `client_area`.
+POST a `pricing.create_addon_checkout` con `client_area` y `monthly` (Stripe Checkout).
 
 Prefijo de URL: **`/client-area/`**
 
