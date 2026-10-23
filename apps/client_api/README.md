@@ -119,7 +119,7 @@ zone (`settings.TIME_ZONE`) is used.
 | GET · PATCH | `/profile/` | token | "Mi perfil": sex, birth date, height, sport days, goal |
 | GET | `/onboarding/` | token | Initial test: status, questions, answers, recommendations |
 | PUT | `/onboarding/steps/1/` · `/onboarding/steps/2/` | token | Save test steps 1–2 (JSON) |
-| POST | `/onboarding/steps/3/` | token | Save test step 3 (multipart photos + measures) |
+| POST | `/onboarding/steps/3/` | token | Save test step 3 (multipart measures + optional photos) |
 | PUT | `/onboarding/feeling/` | token | Retake "Cómo te sientes" of a completed test |
 | GET | `/home/` | token + active | Greeting, current metrics, weekly deltas, advisor WhatsApp |
 | GET | `/measurements/` | token | Measurement history (charts) |
@@ -340,7 +340,7 @@ not need active access. Every endpoint answers **200** with the same `Onboarding
 | GET | `/onboarding/` | — |
 | PUT | `/onboarding/steps/1/` | JSON, all required: `sex`, `birth_date`, `height_cm`, `goal` (free text), `sport_days` (0–7). Also accepted once completed ("Mi perfil" saves here, no new report) |
 | PUT | `/onboarding/steps/2/` | JSON: `scores` (one 1–10 integer per question, keys `"1"`…`"16"`), `has_pathologies` / `has_allergies` (booleans) and `pathologies` / `allergies` (text, required when true, cleared when false) |
-| POST | `/onboarding/steps/3/` | multipart: `front`, `side`, `back` (images) and `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (decimal text), optional `recorded_on`. Same upserts as `/photos/` and `/measurements/` |
+| POST | `/onboarding/steps/3/` | multipart: `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (decimal text, required), optional `recorded_on` and optional `front`, `side`, `back` images (none, some or all; only the ones sent are saved). Same upserts as `/photos/` and `/measurements/` |
 | PUT | `/onboarding/feeling/` | Retake from the profile, same body as step 2. **409** while the test is not completed |
 
 ```json

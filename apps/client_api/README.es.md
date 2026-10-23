@@ -120,7 +120,7 @@ Sin ella se usa la zona del servidor (`settings.TIME_ZONE`).
 | GET · PATCH | `/profile/` | token | "Mi perfil": sexo, fecha de nacimiento, altura, días de deporte, objetivo |
 | GET | `/onboarding/` | token | Test inicial: estado, preguntas, respuestas, recomendaciones |
 | PUT | `/onboarding/steps/1/` · `/onboarding/steps/2/` | token | Guarda los pasos 1–2 del test (JSON) |
-| POST | `/onboarding/steps/3/` | token | Guarda el paso 3 (fotos y medidas en multipart) |
+| POST | `/onboarding/steps/3/` | token | Guarda el paso 3 (medidas y fotos opcionales en multipart) |
 | PUT | `/onboarding/feeling/` | token | Repite "Cómo te sientes" de un test completado |
 | GET | `/home/` | token + activo | Saludo, métricas actuales, deltas semanales, WhatsApp del asesor |
 | GET | `/measurements/` | token | Historial de medidas (gráficas) |
@@ -344,7 +344,7 @@ no necesita acceso activo. Todos los endpoints responden **200** con el mismo cu
 | GET | `/onboarding/` | — |
 | PUT | `/onboarding/steps/1/` | JSON, todo obligatorio: `sex`, `birth_date`, `height_cm`, `goal` (texto libre), `sport_days` (0–7). También se acepta con el test completado ("Mi perfil" guarda por aquí, sin nuevo informe) |
 | PUT | `/onboarding/steps/2/` | JSON: `scores` (un entero 1–10 por pregunta, claves `"1"`…`"16"`), `has_pathologies` / `has_allergies` (booleanos) y `pathologies` / `allergies` (texto, obligatorio si es true, se vacía si es false) |
-| POST | `/onboarding/steps/3/` | multipart: `front`, `side`, `back` (imágenes) y `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (texto decimal), `recorded_on` opcional. Mismos upserts que `/photos/` y `/measurements/` |
+| POST | `/onboarding/steps/3/` | multipart: `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (texto decimal, obligatorios), `recorded_on` opcional y las imágenes `front`, `side`, `back`, también opcionales (ninguna, algunas o todas; solo se guardan las que llegan). Mismos upserts que `/photos/` y `/measurements/` |
 | PUT | `/onboarding/feeling/` | Repetir "Cómo te sientes" desde el perfil, mismo cuerpo que el paso 2. **409** si el test no está completado |
 
 El cuerpo `Onboarding` es el del README en inglés (`status`, `steps`, `current_step`,
