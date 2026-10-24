@@ -142,11 +142,14 @@ platform level.
 **Add-ons** — one Stripe product per add-on, **no** `level_code`, metadata `addon_code=<code>`,
 with one monthly and one yearly price. Set both price IDs on the `Addon` in the admin.
 
-- **Existing subscriptions on an old price** (e.g. the former per-level prices) keep it until their next
-  invoice. After setting the add-on price IDs, run `python manage.py move_addons_to_current_price` once:
-  it switches each item to the monthly price with `proration_behavior=none`, so the current period stays
-  as billed and the new price applies from the next renewal. Items already on the monthly or yearly price
-  are skipped, so it is safe to run again.
+- **Price changes (plans and add-ons).** Existing subscriptions keep their price until their next invoice.
+  After updating every price ID (`Level` and `Addon` in the admin), run
+  `python manage.py move_subscriptions_to_current_price` once. For each item of every `active` /
+  `trialing` Stripe subscription it takes the product (`level_code` → `Level`, else `addon_code` →
+  `Addon`) and the period of its current price (`month` → monthly, `year` → yearly), and switches it to
+  that product's configured price for the same period with `proration_behavior=none`: the current
+  period stays as billed and the new price applies from the next renewal. Items already on that price,
+  and products or periods without a configured price ID, are skipped, so it is safe to run again.
 - **Always its own subscription.** The Customer Portal cannot change plans on multi-product
   subscriptions, and monthly add-ons cannot share a yearly plan subscription, so the plan
   subscription stays single-product.

@@ -144,12 +144,15 @@ suscripción Stripe a un nivel de la plataforma.
 **Add-ons** — un producto Stripe por add-on, **sin** `level_code`, metadato `addon_code=<code>`,
 con un precio mensual y uno anual. Ambos IDs se guardan en el `Addon` desde el admin.
 
-- **Suscripciones existentes con un precio antiguo** (p. ej. los anteriores precios por nivel) lo
-  mantienen hasta su próxima factura. Tras configurar los IDs de precio del add-on, ejecuta una vez
-  `python manage.py move_addons_to_current_price`: cambia cada ítem al precio mensual con
-  `proration_behavior=none`, así que el periodo en curso queda como se cobró y el precio nuevo aplica
-  desde la siguiente renovación. Omite los ítems que ya están en el precio mensual o anual, así que se
-  puede volver a ejecutar sin problema.
+- **Cambios de precio (planes y add-ons).** Las suscripciones existentes mantienen su precio hasta su
+  próxima factura. Tras actualizar todos los IDs de precio (`Level` y `Addon` en el admin), ejecuta una
+  vez `python manage.py move_subscriptions_to_current_price`. Para cada ítem de cada suscripción de
+  Stripe `active` / `trialing` toma el producto (`level_code` → `Level`; si no, `addon_code` → `Addon`)
+  y el periodo de su precio actual (`month` → mensual, `year` → anual), y lo cambia al precio
+  configurado de ese producto para el mismo periodo con `proration_behavior=none`: el periodo en curso
+  queda como se cobró y el precio nuevo aplica desde la siguiente renovación. Omite los ítems que ya
+  tienen ese precio y los productos o periodos sin ID de precio configurado, así que se puede volver a
+  ejecutar sin problema.
 - **Siempre es una suscripción propia.** El Customer Portal no permite cambiar de plan en
   suscripciones con varios productos, y un add-on mensual no puede convivir con un plan anual en la
   misma suscripción; por eso la suscripción de plan sigue teniendo un solo producto.
