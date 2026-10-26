@@ -8,7 +8,9 @@ obligatoria, y `my_resources`, la biblioteca de formación propia del líder.
 
 La app impone un gate duro sobre el resto de la plataforma: hasta que el usuario complete la
 formación inicial, `users.middle.InitialTrainingGateMiddleware` redirige cada petición a
-`/training/onboarding/`. Completarla también es lo que activa la prueba gratuita gestionada por
+`/training/onboarding/`. Al completarla, los usuarios sin suscripción (Básico sin el add-on Conecta Fit) ven en
+el modal final "Para continuar debes adquirir alguna de estas suscripciones:" y un botón "Ir a Suscripciones"
+a la página de precios (también si el líder no tiene mensaje final). Ver "Acceso por suscripción" en
 `user_levels`.
 
 Relación con las apps núcleo:

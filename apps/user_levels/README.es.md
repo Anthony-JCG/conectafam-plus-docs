@@ -124,6 +124,27 @@ descendente ve una cadena efectiva de creadores, no cada líder ancestro.
 a partir de un original visible de línea ascendente mediante `use_shared_stream`. El derivado es
 personal; el original sigue siendo la fuente compartida de la línea.
 
+## Acceso por suscripción
+
+`access.py` añade un modo de acceso web sobre las capabilities del nivel, para todos los usuarios (existentes y nuevos):
+
+| Modo | Quién | Acceso web | Aterrizaje |
+|---|---|---|---|
+| `FULL` | Pro, Líder, Líder Pro | Sin cambios (capabilities y `restricted_routes`) | Home |
+| `CLIENT_AREA_ONLY` | Básico + Conecta Fit (add-on `client_area`) | Páginas de cuenta, Contactos y su modal/pestañas (límites de Básico; no Mensajes), rutas de `client_area` y sus boards de área de clientes (Mis Boards solo lista esos) | Contactos |
+| `NONE` | Básico sin el add-on | Perfil, notificaciones, Cuenta y Suscripción (precios, checkout, portal), la formación inicial, `/accounts/` y logout | Cuenta y Suscripción |
+
+- `RouteLevelAccessMiddleware` lo aplica a los prefijos protegidos por login más `/client-area/`; `/api/`,
+  `/pricing/`, `/accounts/`, admin y las páginas públicas no pasan por la puerta.
+- Una navegación bloqueada redirige a la página de aterrizaje con `?restricted_alert=<clave>`, que abre la
+  alerta; AJAX recibe el JSON 404 habitual `plan_route_restricted`. `home` solo redirige al aterrizaje.
+- Los usuarios solo Conecta Fit entran a home solo si tienen solicitudes de acceso pendientes; el resto de la
+  página queda bajo la máscara de alerta.
+- Alertas: `subscription_required` ("Debes adquirir una suscripción Conectafam-plus o Conecta Fit") y
+  `conectafam_plus_required` ("Para acceder a la web debes adquirir una suscripción Conectafam-plus"),
+  sembradas por la migración `0027` y con enlace a Cuenta y Suscripción. El context processor bloquea las
+  opciones del menú y de accesos rápidos que el modo no permite (`Option.lock`).
+
 ## Vistas e integración frontend
 
 **Esta app no tiene `views.py`, ni `urls.py` ni HTMX.** Es una capa de dominio pura: no posee
