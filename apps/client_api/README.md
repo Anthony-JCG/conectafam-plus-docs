@@ -339,8 +339,8 @@ not need active access. Every endpoint answers **200** with the same `Onboarding
 |---|---|---|
 | GET | `/onboarding/` | — |
 | PUT | `/onboarding/steps/1/` | JSON, all required: `sex`, `birth_date`, `height_cm`, `goal` (free text), `sport_days` (0–7). Also accepted once completed ("Mi perfil" saves here, no new report) |
-| PUT | `/onboarding/steps/2/` | JSON: `scores` (one 1–10 integer per question, keys `"1"`…`"16"`), `has_pathologies` / `has_allergies` (booleans) and `pathologies` / `allergies` (text, required when true, cleared when false) |
-| POST | `/onboarding/steps/3/` | multipart: `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (decimal text, required), optional `recorded_on` and optional `front`, `side`, `back` images (none, some or all; only the ones sent are saved). Same upserts as `/photos/` and `/measurements/` |
+| PUT | `/onboarding/steps/2/` | JSON: `scores` (one 1–10 integer per question, keys `"1"`…`"18"`), `has_pathologies` / `has_allergies` (booleans) and `pathologies` / `allergies` (text, required when true, cleared when false) |
+| POST | `/onboarding/steps/3/` | multipart: `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (decimal text, each optional; only the ones sent are saved and nothing is written when none is sent), optional `recorded_on` and optional `front`, `side`, `back` images (none, some or all; only the ones sent are saved). Same upserts as `/photos/` and `/measurements/` |
 | PUT | `/onboarding/feeling/` | Retake from the profile, same body as step 2. **409** while the test is not completed |
 
 ```json
@@ -358,7 +358,7 @@ not need active access. Every endpoint answers **200** with the same `Onboarding
   "recommendations": {
     "whatsapp": ["Caffe Hongos", "Espirulina"],
     "by_question": [{ "number": 3, "text": "¿Sientes muchas ganas de comer entre horas?", "score": 9, "products": ["Caffe Hongos", "Espirulina"] }],
-    "whatsapp_message": "Hola, he completado el cuestionario y la aplicación me ha recomendado:\n- Caffe Hongos\n- Espirulina"
+    "whatsapp_message": "Hola, he completado el Estudio de Nutrición y me gustaría saber que productos me recomiendas.\n\nQuiero empezar cuanto antes a cuidarme."
   },
   "advisor_whatsapp_url": "https://wa.me/593999111222",
   "whatsapp_url": "https://wa.me/593999111222?text=Hola%2C%20he%20completado..."

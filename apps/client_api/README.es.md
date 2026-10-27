@@ -343,13 +343,13 @@ no necesita acceso activo. Todos los endpoints responden **200** con el mismo cu
 |---|---|---|
 | GET | `/onboarding/` | — |
 | PUT | `/onboarding/steps/1/` | JSON, todo obligatorio: `sex`, `birth_date`, `height_cm`, `goal` (texto libre), `sport_days` (0–7). También se acepta con el test completado ("Mi perfil" guarda por aquí, sin nuevo informe) |
-| PUT | `/onboarding/steps/2/` | JSON: `scores` (un entero 1–10 por pregunta, claves `"1"`…`"16"`), `has_pathologies` / `has_allergies` (booleanos) y `pathologies` / `allergies` (texto, obligatorio si es true, se vacía si es false) |
-| POST | `/onboarding/steps/3/` | multipart: `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (texto decimal, obligatorios), `recorded_on` opcional y las imágenes `front`, `side`, `back`, también opcionales (ninguna, algunas o todas; solo se guardan las que llegan). Mismos upserts que `/photos/` y `/measurements/` |
+| PUT | `/onboarding/steps/2/` | JSON: `scores` (un entero 1–10 por pregunta, claves `"1"`…`"18"`), `has_pathologies` / `has_allergies` (booleanos) y `pathologies` / `allergies` (texto, obligatorio si es true, se vacía si es false) |
+| POST | `/onboarding/steps/3/` | multipart: `weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf` (texto decimal, todas opcionales; solo se guardan las que llegan y si no llega ninguna no se escribe nada), `recorded_on` opcional y las imágenes `front`, `side`, `back`, también opcionales (ninguna, algunas o todas; solo se guardan las que llegan). Mismos upserts que `/photos/` y `/measurements/` |
 | PUT | `/onboarding/feeling/` | Repetir "Cómo te sientes" desde el perfil, mismo cuerpo que el paso 2. **409** si el test no está completado |
 
 El cuerpo `Onboarding` es el del README en inglés (`status`, `steps`, `current_step`,
 `completed_at`, `questions`, `answers` plano, `recommendations` con `whatsapp`, `by_question` y
-`whatsapp_message`, `advisor_whatsapp_url` y `whatsapp_url` con el mensaje en `?text=`).
+`whatsapp_message`, `advisor_whatsapp_url` y `whatsapp_url` con el mensaje en `?text=`). `whatsapp_message` es siempre el texto fijo "Hola, he completado el Estudio de Nutrición y me gustaría saber que productos me recomiendas.\n\nQuiero empezar cuanto antes a cuidarme."; los productos solo van en el email y el PDF.
 
 - `status`: `pending` → `in_progress` (un paso guardado) → `completed` (los tres pasos).
   `current_step` es el primer paso pendiente (`null` si no queda ninguno).
