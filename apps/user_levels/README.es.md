@@ -143,7 +143,9 @@ personal; el original sigue siendo la fuente compartida de la línea.
 - Alertas: `subscription_required` ("Debes adquirir una suscripción Conectafam-plus o Conecta Fit") y
   `conectafam_plus_required` ("Para acceder a la web debes adquirir una suscripción Conectafam-plus"),
   sembradas por la migración `0027` y con enlace a Cuenta y Suscripción. El context processor bloquea las
-  opciones del menú y de accesos rápidos que el modo no permite (`Option.lock`).
+  opciones del menú y de accesos rápidos que el modo no permite (`Option.lock`) y expone `access_alert_key`:
+  con ella el botón global de buscar (búsqueda de formación, fuera de Contactos) se bloquea en ambos modos y
+  el botón global de añadir contacto solo en `NONE`; el middleware ya bloquea sus endpoints.
 
 ## Vistas e integración frontend
 

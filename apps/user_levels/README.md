@@ -136,7 +136,9 @@ the shared source for the line.
 - Alerts: `subscription_required` ("Debes adquirir una suscripción Conectafam-plus o Conecta Fit") and
   `conectafam_plus_required` ("Para acceder a la web debes adquirir una suscripción Conectafam-plus"),
   seeded by migration `0027` and linking to Cuenta y Suscripción. The context processor locks the menu and
-  shortcut options that the mode does not allow (`Option.lock`).
+  shortcut options that the mode does not allow (`Option.lock`) and exposes `access_alert_key`: with it the
+  global search button (training search, outside Contactos) is locked for both modes, and the global
+  add-contact button is locked for `NONE` only; the middleware already blocks their endpoints.
 
 ## Views and Frontend Integration
 
