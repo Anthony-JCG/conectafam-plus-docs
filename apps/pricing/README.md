@@ -3,8 +3,7 @@
 ## Description
 
 Billing layer. Wraps Stripe Checkout, the Stripe Customer Portal, and the webhook pipeline that keeps
-each user's subscription level in sync with Stripe. It also owns the point where the 7-day free trial
-is cancelled once a user starts paying.
+each user's subscription level in sync with Stripe.
 
 This app **does not decide permissions**. It resolves which `user_levels.Level` a Stripe subscription
 maps to and writes it; every capability, limit, and downgrade consequence is handled by
@@ -17,8 +16,7 @@ Relationship to the core apps:
 
 - **`users.User`** — holds `stripe_customer_id` and `allow_unpaid_subscription`; `StripeSubscriptionRecord`
   is a OneToOne extension.
-- **`user_levels`** — reads `Level` / `LevelType` to map products to levels and calls
-  `cancel_free_trial(user)` when an active paid subscription is detected.
+- **`user_levels`** — reads `Level` / `LevelType` to map products to levels.
 - **`core`** — push notifications on subscription events and Redis helpers.
 
 ## Models and Data
@@ -38,24 +36,6 @@ Tracks the **plan** subscription only; add-on subscriptions never touch it.
 
 Prices live in the database (admin → *Add-ons*), like plan prices on `Level`, so each environment
 (sandbox, live) sets its own IDs without new settings.
-
-### Free trial
-
-The trial is stored on `user_levels.UserLevelProfile` (`free_trial_active`, `free_trial_ends_at`,
-`free_trial_task_id`), not here. Lifecycle:
-
-1. Users register at level **PRO**, gated by `InitialTrainingGateMiddleware`.
-2. Completing the initial training calls `User.initial_training_completed()`, which triggers
-   `user_levels.utils.activate_free_trial(user)`.
-3. That sets `free_trial_active`, `free_trial_ends_at = now + 7 days`, and schedules the Celery task
-   `user_levels.tasks.end_free_trial` with an `eta`.
-4. After 7 days the task downgrades the user to **BASIC** and clears the trial fields.
-
-`initial_training_done` guarantees the trial activates only once. If the user subscribes during the
-trial, `sync_subscription_status()` calls `cancel_free_trial(user)`, which revokes the scheduled
-Celery task and clears the fields — the purchased level stands.
-
-Users who never finish the training are blocked by middleware and never receive a trial.
 
 ### Redis caches
 
@@ -155,7 +135,7 @@ with one monthly and one yearly price. Set both price IDs on the `Addon` in the 
   subscription stays single-product.
 - **Checkout** uses `addon.get_price_id(period)`. The webhook **does not** change
   `Level`; it only writes `UserAddon`. `has_active_stripe_subscription` ignores add-on subscriptions.
-- **Level changes** (plan webhook, trial expiry, admin) fire `pricing.signals`, which queues
+- **Level changes** (plan webhook, admin) fire `pricing.signals`, which queues
   `reconcile_user_addons`. Billing changes always take effect at the **next renewal**, with no
   credits or immediate charges: if the new level's capability already includes the add-on the
   subscription is set to `cancel_at_period_end` (access continues until then; the capability covers
@@ -167,9 +147,9 @@ handlers:
 
 | Event | Effect on the other side |
 |---|---|
-| Add-on bought, renewed, cancelled, or deleted | None: `Level`, `StripeSubscriptionRecord`, trial, and plan emails stay untouched (`sync_addon_subscription`, `_handle_addon_subscription_updated` / `_deleted`) |
+| Add-on bought, renewed, cancelled, or deleted | None: `Level`, `StripeSubscriptionRecord`, and plan emails stay untouched (`sync_addon_subscription`, `_handle_addon_subscription_updated` / `_deleted`) |
 | Plan checkout / portal / `has_active_stripe_subscription` / `subscription_status` | Only the subscription with a `level_code` item counts; add-on subscriptions are ignored |
-| Level changes (plan webhook, trial expiry, admin) | Add-on billing changes at the **next period** only (`reconcile_user_addons`): `cancel_at_period_end` when the level already includes the tool, resumed when it no longer does. No credits or mid-cycle charges |
+| Level changes (plan webhook, admin) | Add-on billing changes at the **next period** only (`reconcile_user_addons`): `cancel_at_period_end` when the level already includes the tool, resumed when it no longer does. No credits or mid-cycle charges |
 
 **Adding a new add-on:**
 
@@ -204,9 +184,6 @@ pro.save()
 | `invoice.payment_failed` | Logged; Stripe retries automatically |
 | `invoice.upcoming` | Renewal notice, 3 days ahead by default |
 | `invoice.payment_action_required` | 3D Secure authentication notice |
-
-> `customer.subscription.trial_will_end` is **not** handled: trial expiry is driven by the local
-> Celery task, not by Stripe. Do not rely on it when configuring the endpoint.
 
 **Customer Portal** (`settings/billing/portal`) — configure upgrades with proration
 `Always invoice` and billing anchor `Update to new plan immediately`; downgrades and cancellations

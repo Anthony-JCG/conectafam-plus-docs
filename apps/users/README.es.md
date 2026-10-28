@@ -53,8 +53,8 @@ Extiende `AbstractBaseUser` + `PermissionsMixin`. `USERNAME_FIELD = "username"`.
 
 Propiedades y métodos destacados — varios resuelven datos de otras apps mediante **importaciones
 diferidas** para evitar dependencias circulares: `level_code`, `level_name`, `initial_level_name`,
-`was_downgraded`, `was_leader_when_downgraded`, `has_subscription`, `has_free_trial`,
-`get_end_trial_time()`, `show_subscription_correction_banner` (`user_levels`, `pricing`);
+`was_downgraded`, `was_leader_when_downgraded`, `has_subscription`,
+`show_subscription_correction_banner` (`user_levels`, `pricing`);
 `initial_training_completed()`, `get_training_stats_data()`, `answered_input_training_fields`
 (`training`); `get_daily_progress()`, `get_all_challenges_daily_progress()` (`challenge`);
 `get_users_invited()` (hijos directos en el árbol de patrocinio); `is_leader()`, `is_leader_pro()`,

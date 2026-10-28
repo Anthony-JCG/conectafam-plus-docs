@@ -3,8 +3,7 @@
 ## Descripción
 
 Capa de facturación. Envuelve Stripe Checkout, el Customer Portal de Stripe y el pipeline de
-webhooks que mantiene el nivel de suscripción de cada usuario sincronizado con Stripe. También posee
-el punto en el que se cancela la prueba gratuita de 7 días cuando un usuario empieza a pagar.
+webhooks que mantiene el nivel de suscripción de cada usuario sincronizado con Stripe.
 
 Esta app **no decide permisos**. Resuelve a qué `user_levels.Level` mapea una suscripción Stripe y
 lo escribe; cada capability, límite y consecuencia de degradación lo gestiona `user_levels` (véase
@@ -17,8 +16,7 @@ Relación con las apps núcleo:
 
 - **`users.User`** — mantiene `stripe_customer_id` y `allow_unpaid_subscription`;
   `StripeSubscriptionRecord` es una extensión OneToOne.
-- **`user_levels`** — lee `Level` / `LevelType` para mapear productos a niveles y llama a
-  `cancel_free_trial(user)` cuando detecta una suscripción de pago activa.
+- **`user_levels`** — lee `Level` / `LevelType` para mapear productos a niveles.
 - **`core`** — notificaciones push en eventos de suscripción y helpers de Redis.
 
 ## Modelos y datos
@@ -38,25 +36,6 @@ precio, estado y límites del periodo. Escrito por `upsert_subscription_record` 
 
 Los precios viven en la base de datos (admin → *Add-ons*), igual que los de plan en `Level`, así
 cada entorno (sandbox, live) pone sus propios IDs sin settings nuevos.
-
-### Prueba gratuita
-
-La prueba se almacena en `user_levels.UserLevelProfile` (`free_trial_active`, `free_trial_ends_at`,
-`free_trial_task_id`), no aquí. Ciclo de vida:
-
-1. Los usuarios se registran en el nivel **PRO**, controlados por `InitialTrainingGateMiddleware`.
-2. Completar la formación inicial llama a `User.initial_training_completed()`, que dispara
-   `user_levels.utils.activate_free_trial(user)`.
-3. Eso establece `free_trial_active`, `free_trial_ends_at = now + 7 days` y programa la tarea Celery
-   `user_levels.tasks.end_free_trial` con un `eta`.
-4. Tras 7 días la tarea degrada al usuario a **BASIC** y limpia los campos de la prueba.
-
-`initial_training_done` garantiza que la prueba se activa solo una vez. Si el usuario se suscribe
-durante la prueba, `sync_subscription_status()` llama a `cancel_free_trial(user)`, que revoca la
-tarea Celery programada y limpia los campos — prevalece el nivel comprado.
-
-Los usuarios que nunca terminan la formación quedan bloqueados por el middleware y nunca reciben
-prueba.
 
 ### Cachés Redis
 
@@ -159,7 +138,7 @@ con un precio mensual y uno anual. Ambos IDs se guardan en el `Addon` desde el a
 - **Checkout** usa `addon.get_price_id(period)`. El webhook **no** cambia el
   `Level`; solo escribe `UserAddon`. `has_active_stripe_subscription` ignora las suscripciones de
   add-ons.
-- **Cambios de nivel** (webhook de plan, fin de prueba, admin) disparan `pricing.signals`, que
+- **Cambios de nivel** (webhook de plan, admin) disparan `pricing.signals`, que
   encola `reconcile_user_addons`. Los cambios de cobro aplican siempre en la **próxima renovación**,
   sin créditos ni cargos inmediatos: si la capability del nuevo nivel ya incluye el add-on la
   suscripción queda en `cancel_at_period_end` (el acceso sigue hasta entonces; luego lo cubre la
@@ -171,9 +150,9 @@ separados:
 
 | Evento | Efecto en el otro lado |
 |---|---|
-| Add-on comprado, renovado, cancelado o eliminado | Ninguno: `Level`, `StripeSubscriptionRecord`, prueba gratuita y emails de plan no se tocan (`sync_addon_subscription`, `_handle_addon_subscription_updated` / `_deleted`) |
+| Add-on comprado, renovado, cancelado o eliminado | Ninguno: `Level`, `StripeSubscriptionRecord` y emails de plan no se tocan (`sync_addon_subscription`, `_handle_addon_subscription_updated` / `_deleted`) |
 | Checkout de plan / portal / `has_active_stripe_subscription` / `subscription_status` | Solo cuenta la suscripción con ítem `level_code`; las de add-ons se ignoran |
-| Cambio de nivel (webhook de plan, fin de prueba, admin) | El cobro del add-on cambia solo en el **próximo periodo** (`reconcile_user_addons`): `cancel_at_period_end` si el nivel ya incluye la herramienta, reanudada si deja de incluirla. Sin créditos ni cargos a mitad de ciclo |
+| Cambio de nivel (webhook de plan, admin) | El cobro del add-on cambia solo en el **próximo periodo** (`reconcile_user_addons`): `cancel_at_period_end` si el nivel ya incluye la herramienta, reanudada si deja de incluirla. Sin créditos ni cargos a mitad de ciclo |
 
 **Añadir un add-on nuevo:**
 
@@ -210,9 +189,6 @@ pro.save()
 | `invoice.payment_failed` | Registrado; Stripe reintenta automáticamente |
 | `invoice.upcoming` | Aviso de renovación, 3 días antes por defecto |
 | `invoice.payment_action_required` | Aviso de autenticación 3D Secure |
-
-> `customer.subscription.trial_will_end` **no** se gestiona: la caducidad de la prueba la impulsa la
-> tarea Celery local, no Stripe. No dependas de él al configurar el endpoint.
 
 **Customer Portal** (`settings/billing/portal`) — configura ascensos con prorrateo
 `Always invoice` y ancla de facturación `Update to new plan immediately`; degradaciones y

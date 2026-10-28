@@ -51,7 +51,7 @@ the linked `Contact`.
 
 Notable properties and methods — several resolve data from other apps through **lazy imports** to
 avoid circular dependencies: `level_code`, `level_name`, `initial_level_name`, `was_downgraded`,
-`was_leader_when_downgraded`, `has_subscription`, `has_free_trial`, `get_end_trial_time()`,
+`was_leader_when_downgraded`, `has_subscription`,
 `show_subscription_correction_banner` (`user_levels`, `pricing`); `initial_training_completed()`,
 `get_training_stats_data()`, `answered_input_training_fields` (`training`); `get_daily_progress()`,
 `get_all_challenges_daily_progress()` (`challenge`); `get_users_invited()` (direct children in the

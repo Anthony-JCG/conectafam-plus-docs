@@ -46,9 +46,6 @@ OneToOne with `User`, created by the `ensure_user_level_profile` signal.
 | `was_downgraded` | bool | User was downgraded from leader |
 | `was_leader_when_downgraded` | bool | Distinguishes leader downgrade from pro→basic; used in top-sponsor search |
 | `downgrade_task_id` | str | Celery task ID for scheduled object deletion |
-| `free_trial_active` | bool | Active free trial |
-| `free_trial_ends_at` | datetime | Trial expiry |
-| `free_trial_task_id` | str | Celery task ID for `end_free_trial` |
 
 ### `SharedObjectRecord`
 
@@ -184,7 +181,7 @@ App dependencies:
 | `core` | `OBJECT_TYPE_CHOICES`, Redis helpers |
 | `challenge`, `main`, `training`, `streaming`, `landing`, `boards` | Resolved during downgrade cleanup and the upgrade copy in `services/object_copy.py` |
 | Redis | Level and downline caches, restricted-access alerts |
-| Celery | `end_free_trial`, `cleanup_user_downgraded_objects` |
+| Celery | `cleanup_user_downgraded_objects` |
 
 This app has **no Sentry or Cloudflare integration** of its own.
 

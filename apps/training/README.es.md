@@ -94,6 +94,4 @@ Prefijo de URL: **`/training/`**
 Dependencias de la app: `core`, `users`, `user_levels`, `main` (notificaciones e invalidación de
 caché de descendientes).
 
-**Sin integración directa con Sentry, Celery ni Stripe.** La prueba gratuita que arranca al
-completar la formación la posee `user_levels`; ver [`apps/pricing/README.es.md`](../pricing/README.es.md)
-para cómo interactúa con la facturación.
+**Sin integración directa con Sentry, Celery ni Stripe.**

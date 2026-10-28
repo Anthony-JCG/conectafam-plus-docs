@@ -121,7 +121,7 @@ en el cliente lo consume el ciclo de vida de modales en `static/js/core.js`. El 
 | [`landing`](apps/landing/README.es.md)             | `/landing-page/`, `/p/<slug>/` | Yes  | Constructor de landing pages por bloques y plantillas                                              |
 | [`links`](apps/links/README.es.md)                 | `/links/`                      | No   | Link Mate — página link-in-bio                                                                     |
 | [`streaming`](apps/streaming/README.es.md)         | `/streaming/`                  | No   | Sesiones en vivo con vídeo HLS y conversión post-sesión                                            |
-| [`pricing`](apps/pricing/README.es.md)             | `/pricing/`                    | No   | Suscripciones Stripe, Customer Portal, webhooks, cancelación de prueba gratuita                    |
+| [`pricing`](apps/pricing/README.es.md)             | `/pricing/`                    | No   | Suscripciones Stripe, Customer Portal, webhooks, add-ons                                           |
 | [`keyboard_api`](apps/keyboard_api/README.es.md)   | `/api/keyboard/`               | n/a  | API JSON autenticada por token para el cliente del teclado móvil                                   |
 | [`client_area`](apps/client_area/README.es.md)     | `/client-area/`                | Yes  | Área de clientes del asesor: perfiles, programas, medidas, productos, academia                     |
 | [`client_api`](apps/client_api/README.es.md)       | `/api/client/`                 | n/a  | API JSON autenticada por token para la app de clientes Conecta Fit                                 |
@@ -220,7 +220,7 @@ durante el build de la imagen Docker y los sirve Nginx.
 | Stripe                   | [`pricing`](apps/pricing/README.es.md)                                                                         | Checkout, Customer Portal, 8 eventos de webhook                  |
 | Firebase Cloud Messaging | [`core`](apps/core/README.es.md), [`main`](apps/main/README.es.md), [`keyboard_api`](apps/keyboard_api/README.es.md) | Web Push y push silencioso para sync móvil                |
 | Redis                    | [`core`](apps/core/README.es.md)                                                                               | Caché, feed de notificaciones, locks de procesamiento, índice de búsqueda |
-| Celery                   | varias                                                                                                      | Transcodificación, email, push, fin de trial, limpieza de degradación |
+| Celery                   | varias                                                                                                      | Transcodificación, email, push, limpieza de degradación |
 | ffmpeg                   | [`core`](apps/core/README.es.md), [`boards`](apps/boards/README.es.md), [`streaming`](apps/streaming/README.es.md) | Conversión WebP/HLS; incluido en la imagen                   |
 
 

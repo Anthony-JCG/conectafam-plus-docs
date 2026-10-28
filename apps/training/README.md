@@ -94,6 +94,4 @@ URL prefix: **`/training/`**
 App dependencies: `core`, `users`, `user_levels`, `main` (notifications and descendant cache
 invalidation).
 
-**No direct Sentry, Celery, or Stripe integration.** The free trial that starts on training
-completion is owned by `user_levels`; see [`apps/pricing/README.md`](../pricing/README.md) for how it
-interacts with billing.
+**No direct Sentry, Celery, or Stripe integration.**

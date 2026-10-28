@@ -120,7 +120,7 @@ and consumed on the client by the modal lifecycle in `static/js/core.js`. CSRF i
 | [`landing`](apps/landing/README.md)             | `/landing-page/`, `/p/<slug>/` | Yes  | Block-based landing page builder and templates                                        |
 | [`links`](apps/links/README.md)                 | `/links/`                      | No   | Link Mate — link-in-bio page                                                          |
 | [`streaming`](apps/streaming/README.md)         | `/streaming/`                  | No   | Live sessions with HLS video and post-session conversion                              |
-| [`pricing`](apps/pricing/README.md)             | `/pricing/`                    | No   | Stripe subscriptions, Customer Portal, webhooks, free trial cancellation              |
+| [`pricing`](apps/pricing/README.md)             | `/pricing/`                    | No   | Stripe subscriptions, Customer Portal, webhooks, add-ons                                     |
 | [`keyboard_api`](apps/keyboard_api/README.md)   | `/api/keyboard/`               | n/a  | Token-authenticated JSON API for the mobile keyboard client                           |
 | [`client_area`](apps/client_area/README.md)     | `/client-area/`                | Yes  | Advisor client area: profiles, programs, measurements, products, academy              |
 | [`client_api`](apps/client_api/README.md)       | `/api/client/`                 | n/a  | Token-authenticated JSON API for the Conecta Fit client app                           |
@@ -219,7 +219,7 @@ during the Docker image build, and are served by Nginx.
 | Stripe                   | `[pricing](apps/pricing/README.md)`                                                                         | Checkout, Customer Portal, 8 webhook events                     |
 | Firebase Cloud Messaging | `[core](apps/core/README.md)`, `[main](apps/main/README.md)`, `[keyboard_api](apps/keyboard_api/README.md)` | Web Push and silent push for mobile sync                        |
 | Redis                    | `[core](apps/core/README.md)`                                                                               | Cache, notification feed, processing locks, search index        |
-| Celery                   | multiple                                                                                                    | Media transcoding, email, push, trial expiry, downgrade cleanup |
+| Celery                   | multiple                                                                                                    | Media transcoding, email, push, downgrade cleanup |
 | ffmpeg                   | `[core](apps/core/README.md)`, `[boards](apps/boards/README.md)`, `[streaming](apps/streaming/README.md)`   | WebP/HLS conversion; bundled in the image                       |
 
 
