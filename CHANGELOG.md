@@ -1,5 +1,30 @@
 # Changelog
 
+## [7.0.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v6.0.0...v7.0.0) (2026-10-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **pricing:** addon/<addon_code>/checkout/ is now addon/<addon_code>/checkout/<period>/, and AddonPrice rows are removed, so set the add-on price IDs in the admin.
+
+### Features
+
+* **client_area:** fixed WhatsApp text, optional step 3, Q17-18 ([#348](https://github.com/Anthony-JCG/conectafam-plus/issues/348)) ([e8a7043](https://github.com/Anthony-JCG/conectafam-plus/commit/e8a704389e0638dffd49b855d277efc6b0e4270f))
+* gate web access by subscription ([#347](https://github.com/Anthony-JCG/conectafam-plus/issues/347)) ([689dd41](https://github.com/Anthony-JCG/conectafam-plus/commit/689dd418b31a8d50fd083771f74261e31ce447fd))
+* **pricing:** Cuenta y Suscripción with Conecta Fit add-on ([#343](https://github.com/Anthony-JCG/conectafam-plus/issues/343)) ([55c3e30](https://github.com/Anthony-JCG/conectafam-plus/commit/55c3e306bd4ecaa3aeede39625a36c4a2f93eb75))
+* **pricing:** reprice plan and add-on subscriptions ([#346](https://github.com/Anthony-JCG/conectafam-plus/issues/346)) ([08dfa24](https://github.com/Anthony-JCG/conectafam-plus/commit/08dfa2402226a4342cd25d86864f6798c753fe11))
+
+
+### Bug Fixes
+
+* **pricing:** update description and add advantages for Conecta Fit ([#345](https://github.com/Anthony-JCG/conectafam-plus/issues/345)) ([f04d7d6](https://github.com/Anthony-JCG/conectafam-plus/commit/f04d7d62ecaaa709a163e7e0849971fae5a06b27))
+* **user_levels:** lock global add-contact and search buttons ([#349](https://github.com/Anthony-JCG/conectafam-plus/issues/349)) ([0bd5ff1](https://github.com/Anthony-JCG/conectafam-plus/commit/0bd5ff17d54509f4922ba975ab5d5a6db92855a5))
+
+
+### Documentation
+
+* remove free trial references from READMEs ([#350](https://github.com/Anthony-JCG/conectafam-plus/issues/350)) ([322413a](https://github.com/Anthony-JCG/conectafam-plus/commit/322413a60d8efda7f104c31e74bfff08b746513e))
+
 ## [6.0.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v5.3.1...v6.0.0) (2026-10-23)
 
 
