@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.0.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.0.0...v7.0.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **pricing:** keep level while another plan sub is active ([#352](https://github.com/Anthony-JCG/conectafam-plus/issues/352)) ([b4bdcf9](https://github.com/Anthony-JCG/conectafam-plus/commit/b4bdcf9beeae3f11d30d6990cc689909cbf58c25))
+
 ## [7.0.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v6.0.0...v7.0.0) (2026-10-28)
 
 
