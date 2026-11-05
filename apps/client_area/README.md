@@ -360,7 +360,9 @@ URL prefix: **`/client-area/`**
 - **Access** — access code with copy, accept request (start date and duration, see above),
   activate/deactivate access, WhatsApp link, **Ver respuestas de cliente** (the initial test PDF,
   `client_area_onboarding_report`, entitlement + owned contact, opened inline with
-  `pdf-document-viewer.js` / PDF.js, never downloaded; disabled until a report exists),
+  `pdf-document-viewer.js` / PDF.js, never downloaded; disabled until a report exists), **Evaluación
+  corporal** (the latest body-assessment PDF, `client_area_body_assessment_report`, same access and viewer;
+  «Sin evaluación» / «Generando informe…» until it exists),
   App Store / Play Store badges (placeholders).
 - **Evolución / Fotos** — horizontal scroll, edited inline (see *Evolución / Fotos tables*);
   Evolución also has its chart with Desde / Hasta day selects; Fotos has **Comparar fotos**.
@@ -423,6 +425,47 @@ horas"), a WhatsApp button and **Admitir**.
   A request that is no longer pending returns a 422 toast.
 - Both views require `user_has_client_area` and only see requests of the advisor's own contacts.
 
+## Body-assessment test
+
+Public test at `/evaluacion-corporal/<username>/` (`body_assessment`, `views_public.py`), the same three
+columns as the HGO registration form: personal data (name, surname, email, date of birth, phone with
+the core `PhoneCountryMultiField`, WhatsApp notice, privacy policy), body data (sex, units, weight,
+height, bone build and «¿Con cuál te identificas?» with the images in
+`static/client_area/body-assessment/`) and the 7 habit questions. Choice values match HGO.
+
+- The link works while the advisor has Conecta Fit (`user_has_client_area`); otherwise it shows
+  «Enlace expirado, comunícate con tu asesor».
+- On submit (`services/body_assessment.py`) the phone (E.164) is looked up in the advisor's contacts:
+  an existing contact only gets its empty name / email / date of birth / country, otherwise a contact
+  is created. The answers are saved in `BodyAssessment` (not in the measurement history) and
+  `report_body_assessment_task` (Celery, after commit) emails them only to the advisor with the PDF
+  attached (`report_pdf`, `services/body_assessment_report.py`). The advisor also gets a web notification
+  (`body_assessment_submitted`) linking to the contact's card.
+- Contactos shows a «Test corporal» button left of «Importar contactos» with the link in
+  `components/share-link.html`; without Conecta Fit it is locked with the client-area restricted alert.
+
+### Body-assessment metrics
+
+`services/body_metrics.py` turns a `BodyAssessment` into five orientative metrics (no diagnostic
+purpose) with pure functions over `BodyData` (lb/in converted to kg/cm, age on the answer day):
+
+| Metric | Method | Healthy range |
+|---|---|---|
+| Weight | WHO BMI | BMI 18.5-24.9 × height², ±10% by bone build (status bands moved the same) |
+| Body fat % | Deurenberg (1.2·BMI + 0.23·age − 10.8·male − 5.4), slight correction by exercise level and silhouette | 13-15% for everyone |
+| Muscle mass kg | Lean mass × muscle share (sex, training type, sport, silhouette) | ≥ 74.3% of the current weight |
+| Visceral fat | Orientative 1-30 index from BMI, age, sex and silhouette, shown as % (index × 0.3) | ≤ 2% |
+| Body water % | Watson | 55-70% for everyone |
+
+Each `Metric` has its value, coloured bands (the status is the band of the value), marker position and
+7 equal segments for the bar (light blue to dark red, reversed for muscle and water so the healthy
+band is green), healthy range and the difference to it (negative = to lose, positive = to gain).
+
+The PDF (PyMuPDF, like the onboarding report) has a cover with the circular Conecta Fit logo
+(`static/client_area/body-assessment/conecta-fit-logo.png`), client and advisor, then one A4 landscape
+page per metric drawn like the results card (icon, value, coloured status, bar with marker, healthy
+range, difference). Every page, the email and the public form say the results are orientative.
+
 ## Migrations
 
 | Migration | Change |
@@ -447,6 +490,8 @@ horas"), a WhatsApp button and **Admitir**.
 | `0022_client_onboarding` | **Breaking:** drops `ClientProfile.activity_level` (not converted) and adds `sport_days` / `goal`; renames `ClientMeasurement.leg` → `thigh` (data kept) and adds `abdomen` / `calf`; creates `RecommendedProduct`, `FeelingQuestion` and `ClientOnboarding` |
 | `0023_load_feeling_questions` | Data: the 16 questions and their products (`Recomendaciones.txt`); reverse deletes them |
 | `0024_hair_and_nails_questions` | Data: questions 17 (hair → Proteínas, Reviving) and 18 (nails → Colágeno), `low`; reverse deletes them and Reviving / Colágeno |
+| `0025_bodyassessment` | Creates `BodyAssessment` (body-assessment test answers) |
+| `0026_bodyassessment_report_pdf` | Adds `BodyAssessment.report_pdf` |
 
 `0020` turns the plantillas into Videoteca templates:
 
