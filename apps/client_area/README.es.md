@@ -382,8 +382,8 @@ Prefijo de URL: **`/client-area/`**
   arriba), activar/desactivar el acceso, enlace
   de WhatsApp, **Ver respuestas de cliente** (PDF del test inicial, `client_area_onboarding_report`,
   con permiso del add-on y contacto propio; se abre con `pdf-document-viewer.js` / PDF.js, sin
-  descargar, y queda deshabilitado hasta que exista el informe), **Evaluación corporal** (PDF de la última
-  evaluación, `client_area_body_assessment_report`, mismo permiso y visor; «Sin evaluación» / «Generando
+  descargar, y queda deshabilitado hasta que exista el informe), **Estudio corporal** (PDF del último
+  estudio, `client_area_body_assessment_report`, mismo permiso y visor; «Sin estudio corporal» / «Generando
   informe…» mientras no exista) y badges de App Store / Play Store
   (provisionales).
 - **Evolución / Fotos** — con scroll horizontal y edición en la propia tabla (ver *Tablas Evolución
@@ -451,7 +451,7 @@ del contacto, qué pide (acceso, o continuar el programa con el número de pedid
 - Las dos vistas exigen `user_has_client_area` y solo ven solicitudes de los contactos del propio
   asesor.
 
-## Test de evaluación corporal
+## Estudio corporal
 
 Test público en `/evaluacion-corporal/<username>/` (`body_assessment`, `views_public.py`), con las mismas
 tres columnas que el formulario de registro de HGO: datos personales (nombre, apellidos, email, fecha de
@@ -467,10 +467,10 @@ imágenes de `static/client_area/body-assessment/`) y las 7 preguntas de hábito
   `report_body_assessment_task` (Celery, tras el commit) las envía por email solo al asesor con el PDF
   adjunto (`report_pdf`, `services/body_assessment_report.py`). El asesor recibe además una notificación web
   (`body_assessment_submitted`) que enlaza a la ficha del contacto.
-- En Contactos hay un botón «Test corporal» a la izquierda de «Importar contactos» con el enlace en
+- En Contactos hay un botón «Estudio corporal» a la izquierda de «Importar contactos» con el enlace en
   `components/share-link.html`; sin Conecta Fit aparece bloqueado con el aviso restringido del Área de clientes.
 
-### Métricas del test corporal
+### Métricas del estudio corporal
 
 `services/body_metrics.py` convierte un `BodyAssessment` en cinco métricas orientativas (sin fin
 diagnóstico) con funciones puras sobre `BodyData` (lb/in pasados a kg/cm, edad el día de la respuesta):
@@ -488,10 +488,11 @@ Cada `Metric` tiene su valor, bandas de color (el estado es la banda del valor),
 saludable quede en verde), rango saludable y diferencia con él (negativa = a perder, positiva = a ganar).
 
 El PDF (PyMuPDF, como el informe del onboarding) lleva una portada con el logo circular de Conecta Fit
-(`static/client_area/body-assessment/conecta-fit-logo.png`), cliente y asesor, y luego una hoja A4
-horizontal por métrica dibujada como la tarjeta de resultados (ícono, valor, estado coloreado, barra con
-marcador, rango saludable, diferencia). Cada hoja, el email y el formulario público avisan de que los
-resultados son orientativos.
+(`static/client_area/body-assessment/conecta-fit-logo.png`), cliente y asesor, una hoja de respuestas con
+todas las preguntas enviadas (etiquetas legibles en campos choice) y luego una hoja A4 horizontal por
+métrica dibujada como la tarjeta de resultados (ícono, valor, estado coloreado, barra con marcador, rango
+saludable, diferencia). Cada hoja, el email y el formulario público avisan de que los resultados son
+orientativos.
 
 ## Migraciones
 
@@ -517,8 +518,9 @@ resultados son orientativos.
 | `0022_client_onboarding` | **Rompe compatibilidad:** elimina `ClientProfile.activity_level` (no se convierte) y añade `sport_days` / `goal`; renombra `ClientMeasurement.leg` → `thigh` (conserva datos) y añade `abdomen` / `calf`; crea `RecommendedProduct`, `FeelingQuestion` y `ClientOnboarding` |
 | `0023_load_feeling_questions` | Datos: las 16 preguntas y sus productos (`Recomendaciones.txt`); el reverse las borra |
 | `0024_hair_and_nails_questions` | Datos: preguntas 17 (pelo → Proteínas, Reviving) y 18 (uñas → Colágeno), `low`; el reverse las borra junto con Reviving / Colágeno |
-| `0025_bodyassessment` | Crea `BodyAssessment` (respuestas del test de evaluación corporal) |
+| `0025_bodyassessment` | Crea `BodyAssessment` (respuestas del estudio corporal) |
 | `0026_bodyassessment_report_pdf` | Añade `BodyAssessment.report_pdf` |
+| `0027_alter_bodyassessment_sport` | Añade deporte Hyrox; etiqueta visible «Gimnasio» (valor 7 sin cambiar) |
 
 La `0020` convierte las plantillas antiguas en plantillas de Videoteca:
 

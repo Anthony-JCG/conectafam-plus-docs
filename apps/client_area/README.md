@@ -360,9 +360,9 @@ URL prefix: **`/client-area/`**
 - **Access** — access code with copy, accept request (start date and duration, see above),
   activate/deactivate access, WhatsApp link, **Ver respuestas de cliente** (the initial test PDF,
   `client_area_onboarding_report`, entitlement + owned contact, opened inline with
-  `pdf-document-viewer.js` / PDF.js, never downloaded; disabled until a report exists), **Evaluación
+  `pdf-document-viewer.js` / PDF.js, never downloaded; disabled until a report exists), **Estudio
   corporal** (the latest body-assessment PDF, `client_area_body_assessment_report`, same access and viewer;
-  «Sin evaluación» / «Generando informe…» until it exists),
+  «Sin estudio corporal» / «Generando informe…» until it exists),
   App Store / Play Store badges (placeholders).
 - **Evolución / Fotos** — horizontal scroll, edited inline (see *Evolución / Fotos tables*);
   Evolución also has its chart with Desde / Hasta day selects; Fotos has **Comparar fotos**.
@@ -441,7 +441,7 @@ height, bone build and «¿Con cuál te identificas?» with the images in
   `report_body_assessment_task` (Celery, after commit) emails them only to the advisor with the PDF
   attached (`report_pdf`, `services/body_assessment_report.py`). The advisor also gets a web notification
   (`body_assessment_submitted`) linking to the contact's card.
-- Contactos shows a «Test corporal» button left of «Importar contactos» with the link in
+- Contactos shows a «Estudio corporal» button left of «Importar contactos» with the link in
   `components/share-link.html`; without Conecta Fit it is locked with the client-area restricted alert.
 
 ### Body-assessment metrics
@@ -462,9 +462,10 @@ Each `Metric` has its value, coloured bands (the status is the band of the value
 band is green), healthy range and the difference to it (negative = to lose, positive = to gain).
 
 The PDF (PyMuPDF, like the onboarding report) has a cover with the circular Conecta Fit logo
-(`static/client_area/body-assessment/conecta-fit-logo.png`), client and advisor, then one A4 landscape
-page per metric drawn like the results card (icon, value, coloured status, bar with marker, healthy
-range, difference). Every page, the email and the public form say the results are orientative.
+(`static/client_area/body-assessment/conecta-fit-logo.png`), client and advisor, an answers page with
+every submitted question (human-readable choice labels), then one A4 landscape page per metric drawn like
+the results card (icon, value, coloured status, bar with marker, healthy range, difference). Every page,
+the email and the public form say the results are orientative.
 
 ## Migrations
 
@@ -492,6 +493,7 @@ range, difference). Every page, the email and the public form say the results ar
 | `0024_hair_and_nails_questions` | Data: questions 17 (hair → Proteínas, Reviving) and 18 (nails → Colágeno), `low`; reverse deletes them and Reviving / Colágeno |
 | `0025_bodyassessment` | Creates `BodyAssessment` (body-assessment test answers) |
 | `0026_bodyassessment_report_pdf` | Adds `BodyAssessment.report_pdf` |
+| `0027_alter_bodyassessment_sport` | Adds Hyrox sport; visible label «Gimnasio» (value 7 unchanged) |
 
 `0020` turns the plantillas into Videoteca templates:
 
