@@ -1,5 +1,24 @@
 # Changelog
 
+## [7.1.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.0.1...v7.1.0) (2026-11-10)
+
+
+### Features
+
+* **client-area:** add body assessment test ([#354](https://github.com/Anthony-JCG/conectafam-plus/issues/354)) ([c306aef](https://github.com/Anthony-JCG/conectafam-plus/commit/c306aef47e9f5ad9273a4a93e2aea590c80e490d))
+* **client-area:** adjust body study report and copy ([#359](https://github.com/Anthony-JCG/conectafam-plus/issues/359)) ([25d8b3c](https://github.com/Anthony-JCG/conectafam-plus/commit/25d8b3c7e4dd290f4991940b806f5135f918d11e))
+* rebrand to Fam Plus on famplus.app ([#360](https://github.com/Anthony-JCG/conectafam-plus/issues/360)) ([f599d57](https://github.com/Anthony-JCG/conectafam-plus/commit/f599d57f70de6c147a0b600ed884aaac0e849e0d))
+
+
+### Bug Fixes
+
+* **boards:** skip search index without plan access ([e554fb0](https://github.com/Anthony-JCG/conectafam-plus/commit/e554fb0439847b1c107e59bc0edae0c83304b2d7))
+* **js:** load initTooltips for restricted access ([#358](https://github.com/Anthony-JCG/conectafam-plus/issues/358)) ([f7c6ccb](https://github.com/Anthony-JCG/conectafam-plus/commit/f7c6ccb75cd4847a4e7b6deadc6b41bd38498174))
+* **main:** return a real string from generaldata ([000de66](https://github.com/Anthony-JCG/conectafam-plus/commit/000de66b55ca3f859f7bfbd3fe9ab7829a6e8597))
+* resolve downgrade cleanup and video mime errors ([#357](https://github.com/Anthony-JCG/conectafam-plus/issues/357)) ([9b9c2d6](https://github.com/Anthony-JCG/conectafam-plus/commit/9b9c2d673d4542e2f24993cecbff47f7c1238e59))
+* return real admin labels and retry smtp ([aba906e](https://github.com/Anthony-JCG/conectafam-plus/commit/aba906eed65e955b0a111d547e03365e3347f740))
+* **users:** retry transient smtp errors with backoff ([5a8f008](https://github.com/Anthony-JCG/conectafam-plus/commit/5a8f0081bbb1dc7ffc4f355cbcc9083529ced367))
+
 ## [7.0.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.0.0...v7.0.1) (2026-11-02)
 
 
