@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.1.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.1.0...v7.1.1) (2026-11-10)
+
+
+### Bug Fixes
+
+* **client_area:** align access and sort sports ([#361](https://github.com/Anthony-JCG/conectafam-plus/issues/361)) ([f999949](https://github.com/Anthony-JCG/conectafam-plus/commit/f99994907093eb032777a103a3e615e51c41f80c))
+
 ## [7.1.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.0.1...v7.1.0) (2026-11-10)
 
 
