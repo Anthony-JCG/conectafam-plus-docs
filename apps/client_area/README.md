@@ -311,7 +311,6 @@ URL prefix: **`/client-area/`**
 | Endpoint | Name | Response |
 |---|---|---|
 | `load-pane/` | `load_client_area_pane` | Tools partial (`client-area-tools.html`) |
-| `access/activate/` · `deactivate/` | `client_area_activate_access`, `client_area_deactivate_access` | Tools partial |
 | `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Table partial |
 | `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | The cell (errors inline, 200), or the table (`HX-Retarget`) after a date change |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Table partial |

@@ -330,7 +330,6 @@ Prefijo de URL: **`/client-area/`**
 | Endpoint | Nombre | Respuesta |
 |---|---|---|
 | `load-pane/` | `load_client_area_pane` | Parcial de herramientas (`client-area-tools.html`) |
-| `access/activate/` · `deactivate/` | `client_area_activate_access`, `client_area_deactivate_access` | Parcial de herramientas |
 | `records/<kind>/add/` (`kind` = `measurement` \| `photo` \| `product`, `views.RECORD_GRIDS`) | `client_area_add_record` | Parcial de la tabla |
 | `records/<kind>/<id>/<field>/` | `client_area_set_record_field` | La celda (errores en la celda, 200), o la tabla (`HX-Retarget`) tras cambiar la fecha |
 | `records/<kind>/<id>/hide/` | `client_area_hide_record` | Parcial de la tabla |
