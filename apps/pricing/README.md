@@ -31,7 +31,7 @@ Tracks the **plan** subscription only; add-on subscriptions never touch it.
 
 | Model | Purpose |
 |---|---|
-| `Addon` | Catalog entry. `code` matches the Stripe product metadata `addon_code`. `capability_model_key` + `capability_action` name the `user_levels` capability that already includes the tool (no charge for those levels). `is_active` = on sale. `description` / `advantages` fill the card on the pricing page; `pricing_title` overrides `name` there only (e.g. *Conecta Fit* for `client_area`). One price for every level that has to buy it: `id_monthly_price_stripe` / `id_yearly_price_stripe` (display fallback `monthly_price` / `yearly_price`). |
+| `Addon` | Catalog entry. `code` matches the Stripe product metadata `addon_code`. `capability_model_key` + `capability_action` name the `user_levels` capability that already includes the tool (no charge for those levels). `is_active` = on sale. `description` / `advantages` fill the card on the pricing page; `pricing_title` overrides `name` there only (e.g. *Fam Fit* for `client_area`). One price for every level that has to buy it: `id_monthly_price_stripe` / `id_yearly_price_stripe` (display fallback `monthly_price` / `yearly_price`). |
 | `UserAddon` | Purchase state per `(user, addon)`: `is_active`, `stripe_subscription_id`, `stripe_item_id`. Written only from Stripe webhooks and reconciliation. |
 
 Prices live in the database (admin → *Add-ons*), like plan prices on `Level`, so each environment

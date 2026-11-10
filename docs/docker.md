@@ -1,6 +1,6 @@
 # Containerised deployment
 
-Docker architecture of Conectafam Plus: a Django 5.2 web application stack, aligned with the
+Docker architecture of Fam Plus: a Django 5.2 web application stack, aligned with the
 reference configuration in `production_settings/`. This document covers how the stack is built, how
 it is operated in each environment, and how to migrate an existing systemd deployment onto it.
 
@@ -87,8 +87,8 @@ Selected through `NGINX_CONFIG` in `.env`:
 
 | File | Domain | Certificates |
 |---|---|---|
-| `docker/nginx/production.conf` | `conectafam-plus.com`, `www.conectafam-plus.com` | `/etc/letsencrypt/live/conectafam-plus.com/` |
-| `docker/nginx/test.conf` | `debug.conectafam-plus.com` | `/etc/letsencrypt/live/debug.conectafam-plus.com/` |
+| `docker/nginx/production.conf` | `famplus.app`, `www.famplus.app` | `/etc/letsencrypt/live/famplus.app/` |
+| `docker/nginx/test.conf` | `debug.famplus.app` | `/etc/letsencrypt/live/debug.famplus.app/` |
 
 Host certificates are mounted into the container: `/etc/letsencrypt:/etc/letsencrypt:ro`.
 
@@ -215,8 +215,8 @@ volume `platform_media_data`. Only relevant when inspecting with `docker volume 
 ```bash
 docker compose ps
 docker compose logs -f web
-curl -I https://conectafam-plus.com
-curl -I https://debug.conectafam-plus.com
+curl -I https://famplus.app
+curl -I https://debug.famplus.app
 ```
 
 ## Volumes

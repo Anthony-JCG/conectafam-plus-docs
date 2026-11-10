@@ -121,17 +121,17 @@ the shared source for the line.
 | Mode | Who | Web access | Landing |
 |---|---|---|---|
 | `FULL` | Pro, Leader, Leader Pro | Unchanged (capabilities and `restricted_routes`) | Home |
-| `CLIENT_AREA_ONLY` | Basic + Conecta Fit (`client_area` add-on) | Account pages, Contactos and its contact modal/tabs (Basic limits; not Mensajes), `client_area` routes and their client-area boards (Mis Boards lists only those) | Contactos |
+| `CLIENT_AREA_ONLY` | Basic + Fam Fit (`client_area` add-on) | Account pages, Contactos and its contact modal/tabs (Basic limits; not Mensajes), `client_area` routes and their client-area boards (Mis Boards lists only those) | Contactos |
 | `NONE` | Basic without the add-on | Profile, notifications, Cuenta y Suscripción (pricing, checkout, portal), the initial training, `/accounts/` and logout | Cuenta y Suscripción |
 
 - `RouteLevelAccessMiddleware` applies it to the login-protected prefixes plus `/client-area/`; `/api/`,
   `/pricing/`, `/accounts/`, admin and public pages are not gated.
 - A blocked navigation redirects to the landing page with `?restricted_alert=<key>`, which opens the alert;
   AJAX gets the usual JSON 404 `plan_route_restricted`. `home` just redirects to the landing page.
-- Conecta Fit only users reach home only while they have pending client-area access requests; everything
+- Fam Fit only users reach home only while they have pending client-area access requests; everything
   else on it sits under the alert mask.
-- Alerts: `subscription_required` ("Debes adquirir una suscripción Conectafam-plus o Conecta Fit") and
-  `conectafam_plus_required` ("Para acceder a la web debes adquirir una suscripción Conectafam-plus"),
+- Alerts: `subscription_required` ("Debes adquirir una suscripción Fam Plus o Fam Fit") and
+  `conectafam_plus_required` ("Para acceder a la web debes adquirir una suscripción Fam Plus"),
   seeded by migration `0027` and linking to Cuenta y Suscripción. The context processor locks the menu and
   shortcut options that the mode does not allow (`Option.lock`) and exposes `access_alert_key`: with it the
   global search button (training search, outside Contactos) is locked for both modes, and the global

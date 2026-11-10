@@ -5,7 +5,7 @@
 **Área de clientes** del asesor: programas de nutrición y deporte, códigos de acceso, medidas, fotos
 de evolución, productos nutricionales y academia de cada cliente. El consumidor es un
 `ClientProfile` ligado a un `communication.Contact`, no un `users.User` del árbol de patrocinio. La
-app nativa Conecta Fit lee estos datos a través de [`apps/client_api`](../client_api/README.es.md).
+app nativa Fam Fit lee estos datos a través de [`apps/client_api`](../client_api/README.es.md).
 
 Relación con las apps núcleo:
 
@@ -27,14 +27,14 @@ Relación con las apps núcleo:
 
 | Modelo | Relaciones y campos |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único, `access_status` (`none` / `pending` / `active` / `deactivated`) y `time_zone` (zona IANA del dispositivo, ver [Fechas locales](#fechas-locales)). "Mi perfil" de Conecta Fit: `sex` (`male` / `female`), `height_cm`, `sport_days` (0–7), `goal` (texto libre); la fecha de nacimiento es `contact.date_of_birth`. Solo API, no sale en el panel web. |
+| `ClientProfile` | OneToOne → `communication.Contact`. `access_code` único, `access_status` (`none` / `pending` / `active` / `deactivated`) y `time_zone` (zona IANA del dispositivo, ver [Fechas locales](#fechas-locales)). "Mi perfil" de Fam Fit: `sex` (`male` / `female`), `height_cm`, `sport_days` (0–7), `goal` (texto libre); la fecha de nacimiento es `contact.date_of_birth`. Solo API, no sale en el panel web. |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`, `unlocked_through_day` (día del programa alcanzado en periodos anteriores). La fecha de fin se calcula (`start_date + duration_days`) y no se guarda. Se reutiliza en cada renovación. |
 | `ClientProgramEntry` | Fila de la tabla Programa: FK → asignación (`program_entries`); `assigned_on` (por defecto `timezone.localdate`). Ordenadas de más nueva a más antigua (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | Una celda: FK → fila (`files`); hueco `nutrition` / `sport` / `other`, único por fila; FK → `BoardItem` (el archivo; lo que se sube se convierte en elemento del board). |
 | `ClientProduct` | FK → asignación; `recorded_on`, `products`, `observations`. Solo texto, sin elemento de board. |
 | `TrainingProgram` | Programa formativo: FK → asignación (`training_programs`); FK opcional → `boards.BoardFolder` (`template_folder`, `SET_NULL`: la plantilla de Videoteca que lee); `name`, `order` (secuencia de alta), `created_at`. Se listan de la más nueva a la más antigua (`-created_at`). Una carpeta de Academia. Una plantilla está como mucho una vez en la academia de un cliente (`training_program_assignment_template`). |
 | `ClientLesson` | FK → `TrainingProgram` (`lessons`); un elemento de academia, ordenado por `order`, `pk`. **Elemento propio**: `board_item` (contenido de YouTube), `text`, `attachment_item` (elemento PDF / imagen del board), `unlock_day`. **Elemento de plantilla**: FK → `BoardItem` (`template_item`, `CASCADE`) cuyo contenido lee; solo guarda lo que cambia para el cliente, `unlock_day` (`null` = el de la plantilla) y `hidden_by_advisor`. Una fila por programa y elemento de plantilla (`client_lesson_program_template_item`); `available_day` es el día efectivo. |
-| `ClientOnboarding` | OneToOne → perfil (`onboarding`), se crea al guardar el primer paso. Test inicial de Conecta Fit: `status`, `step1_done` / `step2_done` / `step3_done`, las últimas `scores` (sin histórico), patologías / alergias, `recommendations`, `report_pdf` (PDF para el asesor, se sustituye al repetir), `completed_at`. Ver `services/onboarding.py` y el README de la API |
+| `ClientOnboarding` | OneToOne → perfil (`onboarding`), se crea al guardar el primer paso. Test inicial de Fam Fit: `status`, `step1_done` / `step2_done` / `step3_done`, las últimas `scores` (sin histórico), patologías / alergias, `recommendations`, `report_pdf` (PDF para el asesor, se sustituye al repetir), `completed_at`. Ver `services/onboarding.py` y el README de la API |
 | `FeelingQuestion` / `RecommendedProduct` | Preguntas de "Cómo te sientes" (`number`, `text`, `threshold` `low` 1–6 / `high` 6–10, M2M `products`) y productos (`name`, `image` / `url` opcionales; de momento solo se usa el nombre). Se gestionan en el admin; los cargan `0023` (1–16) y `0024` (17 pelo, 18 uñas) |
 | `ClientMeasurement` | FK → perfil; medidas (`weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf`; `chest` / `arm` se conservan pero ya no se piden), `body_fat_pct` / `muscle_mass_kg` opcionales del cliente (solo API) y `bioimpedance`; `source=client\|advisor` (quién la creó); `hidden_by_advisor`. Una fila por cliente y fecha (`client_measurement_profile_day`). |
 | `ClientProgressPhoto` | FK → perfil; frente, espalda y lado; `source`; `hidden_by_advisor`. Una fila por cliente y fecha (`client_photo_profile_day`). `save()` pasa cada hueco por `core.utils.files.process_image_field_if_changed`, como los demás modelos con imágenes: WebP (calidad 80, máx. 1280 px) y, al sustituir un hueco, se borra su archivo anterior (celda web y API). |
@@ -68,7 +68,7 @@ Un programa programado o activo está **en curso** (`assignment_is_running`, `as
 - **Desactivar / expirar.** `deactivate_program` y la tarea horaria `expire_due_programs` (cuando
   el último día ya terminó en la zona del cliente) rellenan
   `deactivated_at` y llaman a `clear_access_on_program_end` (`access_status=none`); el siguiente
-  login en Conecta Fit crea una nueva solicitud `first_access`.
+  login en Fam Fit crea una nueva solicitud `first_access`.
 - **La renovación conserva los datos.** Las herramientas siempre editan la **asignación de trabajo**
   (`get_or_create_working_assignment`): la última del cliente, haya terminado o no; solo un cliente
   sin ninguna recibe un borrador nuevo. Volver a activar un programa terminado (desde Progreso o
@@ -97,7 +97,7 @@ activa en cada petición `users.middle.TimezoneFromSessionMiddleware`) y el clie
 zonas distintas. Nunca `date.today()`:
 
 - **El calendario del cliente** es `ClientProfile.local_today()`, en `ClientProfile.time_zone` (lo
-  manda Conecta Fit en `X-Timezone` y lo guarda `client_api.auth.remember_client_timezone`; vacío usa
+  manda Fam Fit en `X-Timezone` y lo guarda `client_api.auth.remember_client_timezone`; vacío usa
   `TIME_ZONE`). De él salen el día del programa, los días restantes, el progreso, si está
   programado / activo / terminado (`services.programs`, `on` por defecto), las lecciones
   desbloqueadas, el día de los registros (Añadir, el valor por defecto de la API y su "como mucho
@@ -110,7 +110,7 @@ zonas distintas. Nunca `date.today()`:
 ### Tablas Evolución / Fotos
 
 - **Una fila por cliente y fecha** (el registro entero, no un valor suelto), compartida por el
-  asesor y la app Conecta Fit. La migración `0015` fusionó los duplicados que había (ver
+  asesor y la app Fam Fit. La migración `0015` fusionó los duplicados que había (ver
   [Migraciones](#migraciones)).
 - **Añadir** (`add_record_row`) crea una fila vacía con el día siguiente a la última fila del
   cliente en esa tabla (también las **ocultas por el asesor**, que conservan su fecha), o con el hoy
@@ -153,7 +153,7 @@ zonas distintas. Nunca `date.today()`:
 
 - Cada `ClientProgramEntry` es una fila (fecha + una celda por columna); el cliente siempre recibe
   el **último archivo de cada columna**: la celda con archivo más reciente por fecha de fila y,
-  después, por id de fila. Es lo que devuelve el endpoint `/program/` de Conecta Fit (ver el README de
+  después, por id de fila. Es lo que devuelve el endpoint `/program/` de Fam Fit (ver el README de
   `client_api`).
 - **Nuevo programa** (`add_program_entry`) añade una fila vacía con la fecha de hoy.
 - `set_program_file(entry, slot, ...)` rellena o sustituye una celda con un archivo subido (se
@@ -235,10 +235,10 @@ modo para toda la academia. La copia desde otro cliente conserva la disponibilid
 | `services/access.py` | Asignación de códigos de acceso únicos |
 | `services/access_actions.py` | Aceptar solicitudes, activar/desactivar el acceso, darlo al iniciar el programa, quitarlo al terminar, textos de WhatsApp de continuidad |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **o** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
-| `services/profiles.py` | `get_or_create_client_profile`; "Mi perfil" de Conecta Fit (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
+| `services/profiles.py` | `get_or_create_client_profile`; "Mi perfil" de Fam Fit (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
 | `services/body.py` | Composición corporal de una fila de medidas: kcal diarias Mifflin-St Jeor, IMC y su categoría (el % de grasa y la masa muscular son solo los valores del cliente); niveles de actividad y rangos de valores |
 | `services/programs.py` | Asignación de trabajo, `activate_program` / `deactivate_program`, `start_program_for_request`, fecha de fin, día del programa, progreso, estado en la tarjeta de contacto y filtro del listado |
-| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Conecta Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
+| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, un registro por fecha), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
 | `services/pane.py` | Contexto del panel, `build_catalog_context`, `build_measurement_chart` (series de la gráfica + `dates`), `build_photo_compare`, URLs de WhatsApp |
@@ -389,7 +389,7 @@ Prefijo de URL: **`/client-area/`**
 - **Evolución / Fotos** — con scroll horizontal y edición en la propia tabla (ver *Tablas Evolución
   / Fotos*); Evolución tiene además su gráfica con selects Desde / Hasta; Fotos tiene **Comparar
   fotos**. Borrar una fila (la haya creado el cliente o el asesor) solo marca `hidden_by_advisor`:
-  desaparece del panel, pero la API de Conecta Fit la sigue devolviendo.
+  desaparece del panel, pero la API de Fam Fit la sigue devolviendo.
 - **Productos nutricionales** — Productos y Explicación (el campo `observations`, la columna más
   ancha, `.ca-col-wide`), editados en la propia tabla como
   Evolución (ver *Tablas Evolución / Fotos*). Borrar elimina la fila. La API lee los productos en
@@ -459,7 +459,7 @@ nacimiento, teléfono con el `PhoneCountryMultiField` de core, aviso de WhatsApp
 datos corporales (sexo, unidades, peso, altura, constitución ósea y «¿Con cuál te identificas?» con las
 imágenes de `static/client_area/body-assessment/`) y las 7 preguntas de hábitos. Los valores coinciden con HGO.
 
-- El enlace funciona mientras el asesor tenga Conecta Fit (`user_has_client_area`); si no, muestra
+- El enlace funciona mientras el asesor tenga Fam Fit (`user_has_client_area`); si no, muestra
   «Enlace expirado, comunícate con tu asesor».
 - Al enviar (`services/body_assessment.py`) se busca el teléfono (E.164) entre los contactos del asesor:
   a un contacto existente solo se le rellenan nombre / email / fecha de nacimiento / país vacíos; si no
@@ -468,7 +468,7 @@ imágenes de `static/client_area/body-assessment/`) y las 7 preguntas de hábito
   adjunto (`report_pdf`, `services/body_assessment_report.py`). El asesor recibe además una notificación web
   (`body_assessment_submitted`) que enlaza a la ficha del contacto.
 - En Contactos hay un botón «Estudio corporal» a la izquierda de «Importar contactos» con el enlace en
-  `components/share-link.html`; sin Conecta Fit aparece bloqueado con el aviso restringido del Área de clientes.
+  `components/share-link.html`; sin Fam Fit aparece bloqueado con el aviso restringido del Área de clientes.
 
 ### Métricas del estudio corporal
 
@@ -487,8 +487,8 @@ Cada `Metric` tiene su valor, bandas de color (el estado es la banda del valor),
 7 segmentos iguales en la barra (de azul claro a rojo oscuro, invertidos en músculo y agua para que lo
 saludable quede en verde), rango saludable y diferencia con él (negativa = a perder, positiva = a ganar).
 
-El PDF (PyMuPDF, como el informe del onboarding) lleva una portada con el logo circular de Conecta Fit
-(`static/client_area/body-assessment/conecta-fit-logo.png`), cliente y asesor, una hoja de respuestas con
+El PDF (PyMuPDF, como el informe del onboarding) lleva una portada con el logo circular de Fam Fit
+(`static/client_area/body-assessment/fam-fit-logo.png`), cliente y asesor, una hoja de respuestas con
 todas las preguntas enviadas (etiquetas legibles en campos choice) y luego una hoja A4 horizontal por
 métrica dibujada como la tarjeta de resultados (ícono, valor, estado coloreado, barra con marcador, rango
 saludable, diferencia). Cada hoja, el email y el formulario público avisan de que los resultados son

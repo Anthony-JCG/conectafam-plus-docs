@@ -8,7 +8,7 @@ and `my_resources`, the leader's own training library.
 
 The app owns a hard gate on the rest of the platform: until a user completes the initial training,
 `users.middle.InitialTrainingGateMiddleware` redirects every request to `/training/onboarding/`.
-When it is completed, users without a subscription (Basic without the Conecta Fit add-on) see, in the
+When it is completed, users without a subscription (Basic without the Fam Fit add-on) see, in the
 completion modal, "Para continuar debes adquirir alguna de estas suscripciones:" and an "Ir a Suscripciones"
 button to the pricing page (also when the leader has no end message). See "Access by subscription" in
 `user_levels`.

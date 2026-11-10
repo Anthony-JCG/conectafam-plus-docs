@@ -1,6 +1,6 @@
-# Conectafam Plus
+# Fam Plus
 
-Django 5.2 monolith powering **Conectafam Plus**, a network-marketing platform for distributors:
+Django 5.2 monolith powering **Fam Plus**, a network-marketing platform for distributors:
 team management, training, challenges, CRM, boards, landing pages, live streams, and
 subscription billing.
 
@@ -123,7 +123,7 @@ and consumed on the client by the modal lifecycle in `static/js/core.js`. CSRF i
 | [`pricing`](apps/pricing/README.md)             | `/pricing/`                    | No   | Stripe subscriptions, Customer Portal, webhooks, add-ons                                     |
 | [`keyboard_api`](apps/keyboard_api/README.md)   | `/api/keyboard/`               | n/a  | Token-authenticated JSON API for the mobile keyboard client                           |
 | [`client_area`](apps/client_area/README.md)     | `/client-area/`                | Yes  | Advisor client area: profiles, programs, measurements, products, academy              |
-| [`client_api`](apps/client_api/README.md)       | `/api/client/`                 | n/a  | Token-authenticated JSON API for the Conecta Fit client app                           |
+| [`client_api`](apps/client_api/README.md)       | `/api/client/`                 | n/a  | Token-authenticated JSON API for the Fam Fit client app                           |
 
 A `—` prefix means the app owns no URLConf. `core` has no `urls.py`: its handful of views are
 registered one by one at the site root in `Platform/urls.py` (`/sw.js`, `/share-preview/`,

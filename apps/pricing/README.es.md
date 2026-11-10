@@ -31,7 +31,7 @@ precio, estado y límites del periodo. Escrito por `upsert_subscription_record` 
 
 | Modelo | Propósito |
 |---|---|
-| `Addon` | Entrada del catálogo. `code` coincide con el metadato `addon_code` del producto Stripe. `capability_model_key` + `capability_action` nombran la capability de `user_levels` que ya incluye la herramienta (esos niveles no pagan). `is_active` = a la venta. `description` / `advantages` rellenan la tarjeta de la página de suscripciones; `pricing_title` sustituye a `name` solo ahí (p. ej. *Conecta Fit* para `client_area`). Un único precio para todos los niveles que deben comprarlo: `id_monthly_price_stripe` / `id_yearly_price_stripe` (respaldo visual `monthly_price` / `yearly_price`). |
+| `Addon` | Entrada del catálogo. `code` coincide con el metadato `addon_code` del producto Stripe. `capability_model_key` + `capability_action` nombran la capability de `user_levels` que ya incluye la herramienta (esos niveles no pagan). `is_active` = a la venta. `description` / `advantages` rellenan la tarjeta de la página de suscripciones; `pricing_title` sustituye a `name` solo ahí (p. ej. *Fam Fit* para `client_area`). Un único precio para todos los niveles que deben comprarlo: `id_monthly_price_stripe` / `id_yearly_price_stripe` (respaldo visual `monthly_price` / `yearly_price`). |
 | `UserAddon` | Estado de compra por `(usuario, addon)`: `is_active`, `stripe_subscription_id`, `stripe_item_id`. Solo lo escriben los webhooks de Stripe y la reconciliación. |
 
 Los precios viven en la base de datos (admin → *Add-ons*), igual que los de plan en `Level`, así

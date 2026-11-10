@@ -4,7 +4,7 @@
 
 Advisor-side **client area**: nutrition/sport programs, access codes, measurements, progress photos,
 nutritional products and the academy of each client. Consumers are `ClientProfile` rows linked to a
-`communication.Contact`, not `users.User` nodes in the sponsor tree. The Conecta Fit native app reads
+`communication.Contact`, not `users.User` nodes in the sponsor tree. The Fam Fit native app reads
 this data through [`apps/client_api`](../client_api/README.md).
 
 Relationship to the core apps:
@@ -26,14 +26,14 @@ Relationship to the core apps:
 
 | Model | Relationships and fields |
 |---|---|
-| `ClientProfile` | OneToOne → `communication.Contact`. Unique `access_code`, `access_status` (`none` / `pending` / `active` / `deactivated`), `time_zone` (device IANA zone, see [Local dates](#local-dates)). Conecta Fit "Mi perfil": `sex` (`male` / `female`), `height_cm`, `sport_days` (0–7), `goal` (free text); the birth date is `contact.date_of_birth`. API only, not in the web pane. |
+| `ClientProfile` | OneToOne → `communication.Contact`. Unique `access_code`, `access_status` (`none` / `pending` / `active` / `deactivated`), `time_zone` (device IANA zone, see [Local dates](#local-dates)). Fam Fit "Mi perfil": `sex` (`male` / `female`), `height_cm`, `sport_days` (0–7), `goal` (free text); the birth date is `contact.date_of_birth`. API only, not in the web pane. |
 | `ClientProgramAssignment` | FK → `ClientProfile`. `start_date`, `duration_days`, `deactivated_at`, `academy_enabled`, `unlocked_through_day` (program day reached in previous periods). The end date is derived (`start_date + duration_days`), never stored. Reused on every renewal. |
 | `ClientProgramEntry` | Row of the Programa table: FK → assignment (`program_entries`); `assigned_on` (defaults to `timezone.localdate`). Ordered newest first (`-assigned_on`, `-pk`). |
 | `ClientProgramFile` | One cell: FK → entry (`files`); slot `nutrition` / `sport` / `other`, unique per entry; FK → `BoardItem` (the file; uploads become board items). |
 | `ClientProduct` | FK → assignment; `recorded_on`, `products`, `observations`. Plain text, no board item. |
 | `TrainingProgram` | Programa formativo: FK → assignment (`training_programs`); optional FK → `boards.BoardFolder` (`template_folder`, `SET_NULL`: the Videoteca template it reads); `name`, `order` (create sequence), `created_at`. Listed newest first (`-created_at`). One Academia folder. A template is in a client's academy at most once (`training_program_assignment_template`). |
 | `ClientLesson` | FK → `TrainingProgram` (`lessons`); one academy element, ordered by `order`, `pk`. **Own element**: `board_item` (YouTube content), `text`, `attachment_item` (PDF / image board item), `unlock_day`. **Template element**: FK → `BoardItem` (`template_item`, `CASCADE`) whose content it reads; it only stores the client's overrides, `unlock_day` (`null` = the template's) and `hidden_by_advisor`. One row per program and template item (`client_lesson_program_template_item`); `available_day` is the effective day. |
-| `ClientOnboarding` | OneToOne → profile (`onboarding`), created on the first saved step. Conecta Fit initial test: `status`, `step1_done` / `step2_done` / `step3_done`, the last `scores` (no history), pathologies / allergies, `recommendations`, `report_pdf` (advisor PDF, replaced on retake), `completed_at`. See `services/onboarding.py` and the client API README |
+| `ClientOnboarding` | OneToOne → profile (`onboarding`), created on the first saved step. Fam Fit initial test: `status`, `step1_done` / `step2_done` / `step3_done`, the last `scores` (no history), pathologies / allergies, `recommendations`, `report_pdf` (advisor PDF, replaced on retake), `completed_at`. See `services/onboarding.py` and the client API README |
 | `FeelingQuestion` / `RecommendedProduct` | The "Cómo te sientes" questions (`number`, `text`, `threshold` `low` 1–6 / `high` 6–10, M2M `products`) and products (`name`, optional `image` / `url`; only the name is used for now). Managed in the admin; loaded by `0023` (1–16) and `0024` (17 hair, 18 nails) |
 | `ClientMeasurement` | FK → profile; body metrics (`weight`, `waist`, `abdomen`, `hip`, `thigh`, `calf`; `chest` / `arm` are kept but no longer asked), the client's optional `body_fat_pct` / `muscle_mass_kg` (API only) and `bioimpedance`; `source=client\|advisor` (who created it); `hidden_by_advisor`. One row per client and date (`client_measurement_profile_day`). |
 | `ClientProgressPhoto` | FK → profile; front/back/side; `source`; `hidden_by_advisor`. One row per client and date (`client_photo_profile_day`). `save()` runs `core.utils.files.process_image_field_if_changed` on each slot like the other image models: WebP (quality 80, max 1280 px) and a replaced slot deletes its previous file (web cell and API). |
@@ -65,7 +65,7 @@ Scheduled and active programs are **running** (`assignment_is_running`, `assignm
   `activate_program` raises `ValueError`. Only **Desactivar** (or its end) stops it.
 - **Deactivate / expire.** `deactivate_program` and the hourly `expire_due_programs` (once the last
   day is over in the client's zone) set
-  `deactivated_at` and call `clear_access_on_program_end` (`access_status=none`); the next Conecta Fit
+  `deactivated_at` and call `clear_access_on_program_end` (`access_status=none`); the next Fam Fit
   login creates a new `first_access` request.
 - **Renewal keeps the data.** Tools always edit the **working assignment**
   (`get_or_create_working_assignment`): the client's latest assignment, ended or not; only a client
@@ -93,7 +93,7 @@ request by `users.middle.TimezoneFromSessionMiddleware`) and the client can be i
 Never `date.today()`:
 
 - **The client's calendar** is `ClientProfile.local_today()`, in `ClientProfile.time_zone` (sent
-  by Conecta Fit in `X-Timezone`, stored by `client_api.auth.remember_client_timezone`; empty uses
+  by Fam Fit in `X-Timezone`, stored by `client_api.auth.remember_client_timezone`; empty uses
   `TIME_ZONE`). It drives program day, days remaining, progress, scheduled / active / ended
   (`services.programs`, default `on`), unlocked lessons, the records' day (Añadir, the API
   default and its "at most tomorrow" check), the proposed start date, the hourly expiry and the
@@ -104,7 +104,7 @@ Never `date.today()`:
 ### Evolución / Fotos tables
 
 - **One row per client and date** (the whole record, not a single value), shared by the advisor
-  and the Conecta Fit app. Migration `0015` merged the existing duplicates (see [Migrations](#migrations)).
+  and the Fam Fit app. Migration `0015` merged the existing duplicates (see [Migrations](#migrations)).
 - **Añadir** (`add_record_row`) adds an empty row dated the day after the client's latest row of
   that table (rows **hidden by the advisor** included, they keep their date), or the client's today
   (`local_today()`) when there is none. It never takes a used date, so it always works.
@@ -142,7 +142,7 @@ Never `date.today()`:
 
 - Each `ClientProgramEntry` is a row (date + one cell per column); the client always gets the
   **latest file of each column**: the newest non-empty cell by row date, then row id. That is what
-  the Conecta Fit `/program/` endpoint returns (see the `client_api` README).
+  the Fam Fit `/program/` endpoint returns (see the `client_api` README).
 - **Nuevo programa** (`add_program_entry`) adds an empty row dated today.
 - `set_program_file(entry, slot, ...)` fills or replaces a cell with an upload (stored in the
   column's board folder, see [Board storage](#board-storage)) or a picked board item, and re-dates
@@ -219,10 +219,10 @@ mode. Copy-from-client keeps each element's availability.
 | `services/access.py` | Unique access-code allocation |
 | `services/access_actions.py` | Accept requests, activate/deactivate access, grant on program start, clear on program end, continuity WhatsApp texts |
 | `services/entitlement.py` | `user_has_client_area(user)`: capability **or** `user_has_addon(user, CLIENT_AREA_ADDON_CODE)` |
-| `services/profiles.py` | `get_or_create_client_profile`; Conecta Fit "Mi perfil" (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
+| `services/profiles.py` | `get_or_create_client_profile`; Fam Fit "Mi perfil" (`body_profile_values`, `missing_body_profile_fields`, `update_body_profile`) |
 | `services/body.py` | Body composition of a measurement row: Mifflin-St Jeor daily kcal, BMI and its category (body fat % and muscle mass are only the client's values); activity levels and value ranges |
 | `services/programs.py` | Working assignment, `activate_program` / `deactivate_program`, `start_program_for_request`, end date, program day, progress, contact status and list filter |
-| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Conecta Fit, one record per date), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
+| `services/content.py` | `upsert_measurement` / `upsert_progress_photo` (Fam Fit, one record per date), `add_record_row`, `add_program_entry` / `set_program_file`, `add_product_row`, `hide_by_advisor` |
 | `services/academy.py` | `set_academy_enabled`, `create_training_program`, `add_lessons(program, ...)`, `set_lesson_unlock_day`, `remove_lesson`, `academy_template_folders`, `add_program_from_template`, `sync_template_lessons`, `program_lessons`, `copy_academy_from_client`, `lesson_is_unlocked`, `todays_lesson` |
 | `services/catalog.py` | Advisor's client-area boards and catalog search |
 | `services/pane.py` | Tools pane context, `build_catalog_context`, `build_measurement_chart` (Evolución chart series + `dates`), `build_photo_compare`, WhatsApp URLs |
@@ -367,7 +367,7 @@ URL prefix: **`/client-area/`**
 - **Evolución / Fotos** — horizontal scroll, edited inline (see *Evolución / Fotos tables*);
   Evolución also has its chart with Desde / Hasta day selects; Fotos has **Comparar fotos**.
   Deleting any row (client or advisor source) only sets `hidden_by_advisor`: the row leaves the web
-  pane, the Conecta Fit API still returns it.
+  pane, the Fam Fit API still returns it.
 - **Productos nutricionales** — Productos and Explicación (the `observations` field, widest
   column, `.ca-col-wide`), edited inline like Evolución (see
   *Evolución / Fotos tables*). Delete removes the row. The API reads products live (no cache).
@@ -433,7 +433,7 @@ the core `PhoneCountryMultiField`, WhatsApp notice, privacy policy), body data (
 height, bone build and «¿Con cuál te identificas?» with the images in
 `static/client_area/body-assessment/`) and the 7 habit questions. Choice values match HGO.
 
-- The link works while the advisor has Conecta Fit (`user_has_client_area`); otherwise it shows
+- The link works while the advisor has Fam Fit (`user_has_client_area`); otherwise it shows
   «Enlace expirado, comunícate con tu asesor».
 - On submit (`services/body_assessment.py`) the phone (E.164) is looked up in the advisor's contacts:
   an existing contact only gets its empty name / email / date of birth / country, otherwise a contact
@@ -442,7 +442,7 @@ height, bone build and «¿Con cuál te identificas?» with the images in
   attached (`report_pdf`, `services/body_assessment_report.py`). The advisor also gets a web notification
   (`body_assessment_submitted`) linking to the contact's card.
 - Contactos shows a «Estudio corporal» button left of «Importar contactos» with the link in
-  `components/share-link.html`; without Conecta Fit it is locked with the client-area restricted alert.
+  `components/share-link.html`; without Fam Fit it is locked with the client-area restricted alert.
 
 ### Body-assessment metrics
 
@@ -461,8 +461,8 @@ Each `Metric` has its value, coloured bands (the status is the band of the value
 7 equal segments for the bar (light blue to dark red, reversed for muscle and water so the healthy
 band is green), healthy range and the difference to it (negative = to lose, positive = to gain).
 
-The PDF (PyMuPDF, like the onboarding report) has a cover with the circular Conecta Fit logo
-(`static/client_area/body-assessment/conecta-fit-logo.png`), client and advisor, an answers page with
+The PDF (PyMuPDF, like the onboarding report) has a cover with the circular Fam Fit logo
+(`static/client_area/body-assessment/fam-fit-logo.png`), client and advisor, an answers page with
 every submitted question (human-readable choice labels), then one A4 landscape page per metric drawn like
 the results card (icon, value, coloured status, bar with marker, healthy range, difference). Every page,
 the email and the public form say the results are orientative.

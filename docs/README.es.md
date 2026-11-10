@@ -1,6 +1,6 @@
 # Documentación
 
-Documentación de infraestructura y operaciones de Conectafam Plus. Son **guías temáticas y
+Documentación de infraestructura y operaciones de Fam Plus. Son **guías temáticas y
 runbooks**: cómo se despliega, opera y depura el sistema.
 
 La referencia a nivel de aplicación — modelos, servicios, endpoints, reglas de acceso — no está

@@ -1,6 +1,6 @@
 # Despliegue en contenedores
 
-Arquitectura Docker de Conectafam Plus: una aplicación web Django 5.2 alineada con la
+Arquitectura Docker de Fam Plus: una aplicación web Django 5.2 alineada con la
 configuración de referencia en `production_settings/`. Este documento describe cómo se construye el
 stack, cómo se opera en cada entorno y cómo migrar un despliegue systemd existente hacia él.
 
@@ -87,8 +87,8 @@ Se selecciona con `NGINX_CONFIG` en `.env`:
 
 | Archivo | Dominio | Certificados |
 |---|---|---|
-| `docker/nginx/production.conf` | `conectafam-plus.com`, `www.conectafam-plus.com` | `/etc/letsencrypt/live/conectafam-plus.com/` |
-| `docker/nginx/test.conf` | `debug.conectafam-plus.com` | `/etc/letsencrypt/live/debug.conectafam-plus.com/` |
+| `docker/nginx/production.conf` | `famplus.app`, `www.famplus.app` | `/etc/letsencrypt/live/famplus.app/` |
+| `docker/nginx/test.conf` | `debug.famplus.app` | `/etc/letsencrypt/live/debug.famplus.app/` |
 
 Los certificados del host se montan en el contenedor: `/etc/letsencrypt:/etc/letsencrypt:ro`.
 
@@ -216,8 +216,8 @@ Convención de nombres de Docker Compose: `name` del proyecto (`platform`) + cla
 ```bash
 docker compose ps
 docker compose logs -f web
-curl -I https://conectafam-plus.com
-curl -I https://debug.conectafam-plus.com
+curl -I https://famplus.app
+curl -I https://debug.famplus.app
 ```
 
 ## Volúmenes

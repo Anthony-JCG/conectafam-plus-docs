@@ -1,6 +1,6 @@
 # Documentation
 
-Infrastructure and operations documentation for Conectafam Plus. These are **topic guides and
+Infrastructure and operations documentation for Fam Plus. These are **topic guides and
 runbooks**: how the system is deployed, operated and debugged.
 
 Application-level reference — models, services, endpoints, access rules — is not here. It lives next
