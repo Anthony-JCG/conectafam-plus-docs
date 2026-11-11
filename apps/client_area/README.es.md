@@ -243,7 +243,7 @@ modo para toda la academia. La copia desde otro cliente conserva la disponibilid
 | `services/catalog.py` | Boards del área de clientes del asesor y búsqueda en el catálogo |
 | `services/pane.py` | Contexto del panel, `build_catalog_context`, `build_measurement_chart` (series de la gráfica + `dates`), `build_photo_compare`, URLs de WhatsApp |
 | `services/onboarding.py` | Test inicial: guardado por pasos, `parse_feeling`, `build_recommendations`, `WHATSAPP_MESSAGE` (texto fijo, sin productos), `retake_feeling` |
-| `services/onboarding_report.py` | PDF para el asesor (PyMuPDF, solo texto), correo con el adjunto, `ActivityContact` + notificación web (`report_onboarding_task`) |
+| `services/onboarding_report.py` | PDF para el asesor (PyMuPDF, solo texto), correo breve (intro + WhatsApp y correo del cliente) con el adjunto, `ActivityContact` + notificación web (`report_onboarding_task`) |
 | `services/inbox.py` | `pending_access_requests_for_advisor` (de la más reciente a la más antigua, con contacto, URL de WhatsApp y antigüedad) para el bloque del home; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
 | `services/expiry.py` | Expiración horaria y `pause_programs_without_entitlement` |
 

@@ -227,7 +227,7 @@ mode. Copy-from-client keeps each element's availability.
 | `services/catalog.py` | Advisor's client-area boards and catalog search |
 | `services/pane.py` | Tools pane context, `build_catalog_context`, `build_measurement_chart` (Evolución chart series + `dates`), `build_photo_compare`, WhatsApp URLs |
 | `services/onboarding.py` | Initial test: step saving, `parse_feeling`, `build_recommendations`, `WHATSAPP_MESSAGE` (fixed text, no products), `retake_feeling` |
-| `services/onboarding_report.py` | Advisor PDF (PyMuPDF, text only), email with it attached, `ActivityContact` + web notification (`report_onboarding_task`) |
+| `services/onboarding_report.py` | Advisor PDF (PyMuPDF, text only), short email (intro + client WhatsApp and email) with the PDF attached, `ActivityContact` + web notification (`report_onboarding_task`) |
 | `services/inbox.py` | `pending_access_requests_for_advisor` (newest first, with contact, WhatsApp URL and age) for the home block; `HOME_ACCESS_REQUESTS_LIMIT = 3` |
 | `services/expiry.py` | Hourly expiry and `pause_programs_without_entitlement` |
 
