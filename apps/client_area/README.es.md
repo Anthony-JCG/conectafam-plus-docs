@@ -458,6 +458,7 @@ nacimiento, teléfono con el `PhoneCountryMultiField` de core, aviso de WhatsApp
 datos corporales (sexo, unidades, peso, altura, constitución ósea y «¿Con cuál te identificas?» con las
 imágenes de `static/client_area/body-assessment/`) y las 7 preguntas de hábitos. Los valores coinciden con HGO.
 
+- Solo en femenino: «¿Eres mamá?» y «¿Tienes regla, premenopausia o menopausia?» (obligatorias; no salen en el PDF si es hombre).
 - El enlace funciona mientras el asesor tenga Fam Fit (`user_has_client_area`); si no, muestra
   «Enlace expirado, comunícate con tu asesor».
 - Al enviar (`services/body_assessment.py`) se busca el teléfono (E.164) entre los contactos del asesor:

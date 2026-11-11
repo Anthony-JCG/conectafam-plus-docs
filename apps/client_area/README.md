@@ -432,6 +432,7 @@ the core `PhoneCountryMultiField`, WhatsApp notice, privacy policy), body data (
 height, bone build and «¿Con cuál te identificas?» with the images in
 `static/client_area/body-assessment/`) and the 7 habit questions. Choice values match HGO.
 
+- Female only: «¿Eres mamá?» and «¿Tienes regla, premenopausia o menopausia?» (required; omitted from the PDF for men).
 - The link works while the advisor has Fam Fit (`user_has_client_area`); otherwise it shows
   «Enlace expirado, comunícate con tu asesor».
 - On submit (`services/body_assessment.py`) the phone (E.164) is looked up in the advisor's contacts:
