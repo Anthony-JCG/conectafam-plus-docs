@@ -459,6 +459,7 @@ datos corporales (sexo, unidades, peso, altura, constitución ósea y «¿Con cu
 imágenes de `static/client_area/body-assessment/`) y las 7 preguntas de hábitos. Los valores coinciden con HGO.
 
 - Solo en femenino: «¿Eres mamá?» y «¿Tienes regla, premenopausia o menopausia?» (obligatorias; no salen en el PDF si es hombre).
+- La última página del PDF muestra un pack recomendado (IMC y kilos a perder) y, si aplica, el pack de menopausia.
 - El enlace funciona mientras el asesor tenga Fam Fit (`user_has_client_area`); si no, muestra
   «Enlace expirado, comunícate con tu asesor».
 - Al enviar (`services/body_assessment.py`) se busca el teléfono (E.164) entre los contactos del asesor:
@@ -478,10 +479,10 @@ diagnóstico) con funciones puras sobre `BodyData` (lb/in pasados a kg/cm, edad 
 | Métrica | Método | Rango saludable |
 |---|---|---|
 | Peso | IMC (OMS) | IMC 18,5-24,9 × altura², ±10% según constitución ósea (las bandas de estado se mueven igual) |
-| Masa grasa % | Deurenberg (1,2·IMC + 0,23·edad − 10,8·hombre − 5,4), con un ajuste leve por nivel de ejercicio y silueta | 13-15% para todos |
-| Masa muscular kg | Masa magra × fracción muscular (sexo, tipo de entrenamiento, deporte, silueta) | ≥ 74,3% del peso actual |
-| Grasa visceral | Índice orientativo 1-30 con IMC, edad, sexo y silueta, mostrado en % (índice × 0,3) | ≤ 2% |
-| Agua corporal % | Watson | 55-70% para todos |
+| Masa grasa % | CUN-BAE (Gómez-Ambrosi 2012), con IMC, sexo y edad | Gallagher 2000 por sexo y edad (p. ej. hombres 20-39: 8-20%, mujeres 20-39: 21-33%; fuera de 20-79 se usa la banda más cercana) |
+| Masa muscular kg | Músculo esquelético ≈ 52% (hombres) / 47% (mujeres) de la masa magra (Janssen 2000) | ≥ SMI de Janssen × altura² (hombres 10,75, mujeres 6,75 kg/m²) |
+| Grasa visceral | Nivel orientativo 1-30 al estilo Tanita, con IMC, edad, sexo y silueta (no es un %) | 1-12 |
+| Agua corporal % | Watson | Hombres 50-65%, mujeres 45-60% |
 
 Cada `Metric` tiene su valor, bandas de color (el estado es la banda del valor), posición del marcador y
 7 segmentos iguales en la barra (de azul claro a rojo oscuro, invertidos en músculo y agua para que lo

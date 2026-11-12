@@ -433,6 +433,7 @@ height, bone build and «¿Con cuál te identificas?» with the images in
 `static/client_area/body-assessment/`) and the 7 habit questions. Choice values match HGO.
 
 - Female only: «¿Eres mamá?» and «¿Tienes regla, premenopausia o menopausia?» (required; omitted from the PDF for men).
+- The last page of the PDF lists one recommended pack (BMI and kg to lose), plus the menopause pack when it applies.
 - The link works while the advisor has Fam Fit (`user_has_client_area`); otherwise it shows
   «Enlace expirado, comunícate con tu asesor».
 - On submit (`services/body_assessment.py`) the phone (E.164) is looked up in the advisor's contacts:
@@ -452,10 +453,10 @@ purpose) with pure functions over `BodyData` (lb/in converted to kg/cm, age on t
 | Metric | Method | Healthy range |
 |---|---|---|
 | Weight | WHO BMI | BMI 18.5-24.9 × height², ±10% by bone build (status bands moved the same) |
-| Body fat % | Deurenberg (1.2·BMI + 0.23·age − 10.8·male − 5.4), slight correction by exercise level and silhouette | 13-15% for everyone |
-| Muscle mass kg | Lean mass × muscle share (sex, training type, sport, silhouette) | ≥ 74.3% of the current weight |
-| Visceral fat | Orientative 1-30 index from BMI, age, sex and silhouette, shown as % (index × 0.3) | ≤ 2% |
-| Body water % | Watson | 55-70% for everyone |
+| Body fat % | CUN-BAE (Gómez-Ambrosi 2012), from BMI, sex and age | Gallagher 2000 by sex and age (e.g. men 20-39: 8-20%, women 20-39: 21-33%; ages outside 20-79 use the nearest band) |
+| Muscle mass kg | Skeletal muscle ≈ 52% (men) / 47% (women) of fat-free mass (Janssen 2000) | ≥ Janssen SMI × height² (men 10.75, women 6.75 kg/m²) |
+| Visceral fat | Orientative Tanita-style 1-30 level from BMI, age, sex and silhouette (not a %) | 1-12 |
+| Body water % | Watson | Men 50-65%, women 45-60% |
 
 Each `Metric` has its value, coloured bands (the status is the band of the value), marker position and
 7 equal segments for the bar (light blue to dark red, reversed for muscle and water so the healthy
