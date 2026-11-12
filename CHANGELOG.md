@@ -1,5 +1,18 @@
 # Changelog
 
+## [7.2.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.1.1...v7.2.0) (2026-11-12)
+
+
+### Features
+
+* **client_area:** add female-only body-study questions ([#365](https://github.com/Anthony-JCG/conectafam-plus/issues/365)) ([acd6333](https://github.com/Anthony-JCG/conectafam-plus/commit/acd6333b284042e92581575f87beadd311113620))
+* **client_area:** recommend packs in body-study PDF ([#366](https://github.com/Anthony-JCG/conectafam-plus/issues/366)) ([9e07201](https://github.com/Anthony-JCG/conectafam-plus/commit/9e07201ac399e60813f009ac6aed60a80e7a3719))
+
+
+### Bug Fixes
+
+* **client_area:** shorten onboarding advisor email ([#363](https://github.com/Anthony-JCG/conectafam-plus/issues/363)) ([99448af](https://github.com/Anthony-JCG/conectafam-plus/commit/99448af36f60f71f314837075bddbc7b239455c2))
+
 ## [7.1.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.1.0...v7.1.1) (2026-11-10)
 
 
