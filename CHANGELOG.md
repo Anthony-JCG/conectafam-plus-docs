@@ -1,5 +1,17 @@
 # Changelog
 
+## [7.3.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.2.1...v7.3.0) (2026-11-13)
+
+
+### Features
+
+* horizontal pack cards and custom contact statuses ([#371](https://github.com/Anthony-JCG/conectafam-plus/issues/371)) ([2e1478c](https://github.com/Anthony-JCG/conectafam-plus/commit/2e1478c8da6408e965a4d8d9b2746396c96d0b97))
+
+
+### Bug Fixes
+
+* **client-area:** redirect anonymous reports to login ([#369](https://github.com/Anthony-JCG/conectafam-plus/issues/369)) ([74d193b](https://github.com/Anthony-JCG/conectafam-plus/commit/74d193bce8299a41850fc1218de7502efe83cebf))
+
 ## [7.2.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.2.0...v7.2.1) (2026-11-13)
 
 
