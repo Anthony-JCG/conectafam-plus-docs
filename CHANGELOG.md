@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.2.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.2.0...v7.2.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **client_area:** replace muscular silhouette with chubby ([#367](https://github.com/Anthony-JCG/conectafam-plus/issues/367)) ([093a819](https://github.com/Anthony-JCG/conectafam-plus/commit/093a819d91d5b8d41d8d8a016da56afc543dc032))
+
 ## [7.2.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.1.1...v7.2.0) (2026-11-12)
 
 
