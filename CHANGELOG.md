@@ -1,5 +1,12 @@
 # Changelog
 
+## [7.3.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.3.0...v7.3.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **templates:** portal table dropdowns on ios ([#372](https://github.com/Anthony-JCG/conectafam-plus/issues/372)) ([c2edb1e](https://github.com/Anthony-JCG/conectafam-plus/commit/c2edb1e71764134b280325a9bc372abb74195e67))
+
 ## [7.3.0](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.2.1...v7.3.0) (2026-11-13)
 
 
