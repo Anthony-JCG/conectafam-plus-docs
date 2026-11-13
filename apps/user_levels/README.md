@@ -124,7 +124,7 @@ the shared source for the line.
 | `CLIENT_AREA_ONLY` | Basic + Fam Fit (`client_area` add-on) | Account pages, Contactos and its contact modal/tabs (Basic limits; not Mensajes), `client_area` routes and their client-area boards (Mis Boards lists only those) | Contactos |
 | `NONE` | Basic without the add-on | Profile, notifications, Cuenta y Suscripción (pricing, checkout, portal), the initial training, `/accounts/` and logout | Cuenta y Suscripción |
 
-- `RouteLevelAccessMiddleware` applies it to the login-protected prefixes plus `/client-area/`; `/api/`,
+- `RouteLevelAccessMiddleware` applies it to the login-protected prefixes (including `/client-area/`); `/api/`,
   `/pricing/`, `/accounts/`, admin and public pages are not gated.
 - A blocked navigation redirects to the landing page with `?restricted_alert=<key>`, which opens the alert;
   AJAX gets the usual JSON 404 `plan_route_restricted`. `home` just redirects to the landing page.

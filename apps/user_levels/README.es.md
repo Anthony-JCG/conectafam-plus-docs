@@ -131,7 +131,7 @@ personal; el original sigue siendo la fuente compartida de la línea.
 | `CLIENT_AREA_ONLY` | Básico + Fam Fit (add-on `client_area`) | Páginas de cuenta, Contactos y su modal/pestañas (límites de Básico; no Mensajes), rutas de `client_area` y sus boards de área de clientes (Mis Boards solo lista esos) | Contactos |
 | `NONE` | Básico sin el add-on | Perfil, notificaciones, Cuenta y Suscripción (precios, checkout, portal), la formación inicial, `/accounts/` y logout | Cuenta y Suscripción |
 
-- `RouteLevelAccessMiddleware` lo aplica a los prefijos protegidos por login más `/client-area/`; `/api/`,
+- `RouteLevelAccessMiddleware` lo aplica a los prefijos protegidos por login (incluido `/client-area/`); `/api/`,
   `/pricing/`, `/accounts/`, admin y las páginas públicas no pasan por la puerta.
 - Una navegación bloqueada redirige a la página de aterrizaje con `?restricted_alert=<clave>`, que abre la
   alerta; AJAX recibe el JSON 404 habitual `plan_route_restricted`. `home` solo redirige al aterrizaje.
