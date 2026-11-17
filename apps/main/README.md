@@ -123,6 +123,7 @@ Bootstrap are self-hosted and loaded at the end of `<body>`.
 - Route step writes require `is_any_leader()`.
 - Team data endpoints call `verify_user_access`, which walks the sponsor chain up to depth 100.
 - Only the direct sponsor may delete or resend a pending invitation.
+- `my_team`, `resend_invitation` and `delete_pending_invitation` are open to Basic users, with or without Fam Fit. Team tracking and the distributor route stay behind the subscription gate.
 
 ## Configuration and Dependencies
 

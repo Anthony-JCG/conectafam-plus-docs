@@ -121,8 +121,8 @@ the shared source for the line.
 | Mode | Who | Web access | Landing |
 |---|---|---|---|
 | `FULL` | Pro, Leader, Leader Pro | Unchanged (capabilities and `restricted_routes`) | Home |
-| `CLIENT_AREA_ONLY` | Basic + Fam Fit (`client_area` add-on) | Account pages, Contactos and its contact modal/tabs (Basic limits; not Mensajes), `client_area` routes and their client-area boards (Mis Boards lists only those) | Contactos |
-| `NONE` | Basic without the add-on | Profile, notifications, Cuenta y Suscripción (pricing, checkout, portal), the initial training, `/accounts/` and logout | Cuenta y Suscripción |
+| `CLIENT_AREA_ONLY` | Basic + Fam Fit (`client_area` add-on) | Account pages, My Team (the page and pending invitations; tracking and the distributor route stay closed), Contactos and its contact modal/tabs (Basic limits; not Mensajes), `client_area` routes and their client-area boards (Mis Boards lists only those) | Contactos |
+| `NONE` | Basic without the add-on | Profile, notifications, Cuenta y Suscripción (pricing, checkout, portal), My Team (the page and pending invitations; tracking and the distributor route stay closed), the initial training, `/accounts/` and logout | Cuenta y Suscripción |
 
 - `RouteLevelAccessMiddleware` applies it to the login-protected prefixes (including `/client-area/`); `/api/`,
   `/pricing/`, `/accounts/`, admin and public pages are not gated.
