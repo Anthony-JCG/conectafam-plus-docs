@@ -1,5 +1,21 @@
 # Changelog
 
+## [7.3.2](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.3.1...v7.3.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **sentry:** stop crashes and tag releases ([23912d3](https://github.com/Anthony-JCG/conectafam-plus/commit/23912d3f03351b32d7672c794956844361facfc1))
+* stop four production crashes from sentry ([3ea4863](https://github.com/Anthony-JCG/conectafam-plus/commit/3ea4863e12f6aa74877d2f07838abdb6c6d875c1))
+
+
+### Code Refactoring
+
+* **access:** allow basic users to manage team invitations ([bea2624](https://github.com/Anthony-JCG/conectafam-plus/commit/bea2624de7b9bbec9a457d7a3f8fc98dde022e00))
+* **admin:** remove unused search and filter fields ([0ecc4dd](https://github.com/Anthony-JCG/conectafam-plus/commit/0ecc4dd3a204db4972236acbaed17b715aec4142))
+* **my-team:** move invitation link to sponsor card and remove invitation button ([7f9373c](https://github.com/Anthony-JCG/conectafam-plus/commit/7f9373cd4cf20d73ede39cafd864b29c12a2b6a9))
+* **my-team:** open invites to basic users ([cb34756](https://github.com/Anthony-JCG/conectafam-plus/commit/cb34756201bd817a16b3426441f46f71c474b120))
+
 ## [7.3.1](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.3.0...v7.3.1) (2026-11-13)
 
 
