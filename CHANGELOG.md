@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.3.3](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.3.2...v7.3.3) (2026-11-19)
+
+
+### Bug Fixes
+
+* **fcm:** keep tokens on config errors ([#378](https://github.com/Anthony-JCG/conectafam-plus/issues/378)) ([1d230da](https://github.com/Anthony-JCG/conectafam-plus/commit/1d230daf72c0c06ceca11ecbcda87880f53014c9))
+* **keyboard:** scope board sync to the viewer line ([#377](https://github.com/Anthony-JCG/conectafam-plus/issues/377)) ([6399480](https://github.com/Anthony-JCG/conectafam-plus/commit/6399480d7b71072830c499f4fa4446e657dbd0ac))
+
 ## [7.3.2](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.3.1...v7.3.2) (2026-11-18)
 
 
