@@ -29,7 +29,7 @@ Relationship to the core apps:
 | `BoardItem` | Mosaic element. Types: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`, `academy` (client-area Videoteca only, see below). Files up to 10 MB. Optional FK → `landing.LandingPage`; `unlock_day` (academy availability, `0` = siempre) |
 | `BoardCollaborator` | Invited user. PRO+ collaborators have read+edit access; Basic collaborators are view-only. Unique on `(board, user)` |
 | `BoardLibraryEntry` | Reference to a shared board saved into the user's own library (read-only) |
-| `BoardDeleteLog` | Append-only log of permanently deleted boards. `board_id` / `user_id` are plain integers because the `Board` row is already gone. Consumed **only** by the keyboard API delta-sync endpoint so mobile clients know what to purge |
+| `BoardDeleteLog` | Append-only log of permanently deleted boards. `board_id` / `user_id` are plain integers because the `Board` row is already gone. It also stores `is_public` and `audience_user_ids` so only users who could see the board are told. Consumed **only** by the keyboard API delta-sync endpoint so mobile clients know what to purge |
 
 ### Client-area boards
 
@@ -155,7 +155,7 @@ All in `services/board_permissions.py`; entitlement is `user_levels`
 
 The owner settings form exposes only title, description and cover; client-area boards cannot be
 deleted from the UI (`delete_board` / `save_board` skip them). The flag also excludes them from
-keyboard sync (`_get_accessible_board_ids`) and from `BOARDS_MODEL_KEY` create limits and
+keyboard sync (`get_accessible_board_ids`, including for the owner) and from `BOARDS_MODEL_KEY` create limits and
 excess-object counts.
 
 #### Migrations

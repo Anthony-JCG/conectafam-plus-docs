@@ -237,7 +237,7 @@ Authorization: Token <token>
 
 | Query | What it fetches |
 |---|---|
-| 4 ID lookups | Owned, library, collaborator, and public board IDs |
+| 4 ID lookups | Owned, library, collaborator, and line-public board IDs |
 | 1 board query | All Board rows with owner (`select_related`) |
 | 1 folder query | All BoardFolder rows (bulk) |
 | 1 item query | All BoardItem rows with landing page (bulk, `select_related`) |
@@ -249,7 +249,7 @@ Authorization: Token <token>
 | 4 ID lookups | Same access resolution as full sync |
 | 1 changed-IDs query | Board IDs with `updated_at > since` |
 | 1 board query | Only the changed Board rows |
-| 1 deletion query | `BoardDeleteLog` entries with `deleted_at > since` |
+| 1 deletion query | `BoardDeleteLog` entries with `deleted_at > since` that this user could see |
 | 1 folder query | Only folders of changed boards |
 | 1 item query | Only items of changed boards |
 
@@ -307,7 +307,7 @@ Both fields are always present JSON integers (never null, never omitted). Empty 
 {"bytes": 0, "file_count": 0}
 ```
 
-Access resolution matches `GET /sync/` (owned + library + collaborator + public). Sizes are
+Access resolution matches `GET /sync/` (owned + library + collaborator + public in the viewer's line). Sizes are
 persisted on `Board.cover_image_size`, `BoardItem.file_size`, and `BoardItem.preview_size` when
 media is uploaded or changed, so this endpoint is a SQL `SUM` / `COUNT` — no per-file storage
 HEAD and no media download. Payload is tiny (Gzip optional).
@@ -553,7 +553,7 @@ to determine offline download and storage requirements before fetching media.
 | Field | Type | Description |
 |---|---|---|
 | `boards` | `FullBoard[]` | Changed/new boards with all folders and items. On full sync, contains every accessible board. On delta sync, contains only boards with `updated_at > since`. |
-| `deleted_board_ids` | `int[]` | IDs of permanently deleted boards since `since`. Always `[]` on full sync. Client must remove these from local storage. |
+| `deleted_board_ids` | `int[]` | IDs of deleted boards since `since` that this user could see (owned, saved, collaborated, or public in their line). Always `[]` on full sync. Client must remove these from local storage. |
 | `synced_at` | `string` | UTC ISO 8601 timestamp. **Store this value and pass it as `since` on the next sync call.** |
 | `is_full_sync` | `bool` | `true` on full sync (client replaces all local boards). `false` on delta (client upserts `boards` and removes `deleted_board_ids`). |
 
@@ -647,7 +647,7 @@ A board may have multiple flags (e.g. owner + public).
 
 Delta sync cannot detect boards that became inaccessible (collaborator removed, board made private, entry removed from library). Those boards remain in local storage until a full sync. Schedule a full sync on app foreground after extended idle time to purge stale entries.
 
-Public boards created by other users are never individually push-notified (fan-out to all authenticated users is not scalable). They appear on the next full sync.
+Public boards created by other users in the viewer's line are never individually push-notified. They appear on the next full sync.
 
 ---
 
@@ -658,7 +658,7 @@ The API returns all boards the user is allowed to see, applying the same rules a
 1. **Owned** — boards created by the user
 2. **Library** — boards saved via `BoardLibraryEntry`
 3. **Collaborated** — boards where the user is a `BoardCollaborator`
-4. **Public** — boards with `is_public = True`, visible to all authenticated users
+4. **Public** — boards with `is_public = True` whose owner is in the viewer's line (`get_visible_creator_ids`). A Leader Pro does not receive the public boards of a Leader Pro above, and someone in another line or above the owner does not receive them either.
 
 The `is_owner`, `is_library`, `is_collaborator`, and `is_public` flags reflect all applicable categories for each board.
 
@@ -832,4 +832,4 @@ apps/boards/
                        # dispatch FCM tasks; collaborator/library entry hooks
 ```
 
-Boards with `is_client_area=True` are omitted from `_get_accessible_board_ids` and never sync to the mobile keyboard.
+Boards with `is_client_area=True` are omitted from `get_accessible_board_ids` and never sync to the mobile keyboard, not even for their owner. `GET /boards/<id>/` answers 404.

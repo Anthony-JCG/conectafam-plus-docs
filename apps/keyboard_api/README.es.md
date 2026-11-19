@@ -268,7 +268,7 @@ Authorization: Token <token>
 | 4 búsquedas de IDs | Misma resolución de acceso que la sync completa |
 | 1 query de IDs cambiados | IDs de Board con `updated_at > since` |
 | 1 query de boards | Solo las filas Board cambiadas |
-| 1 query de borrados | Entradas de `BoardDeleteLog` con `deleted_at > since` |
+| 1 query de borrados | Entradas de `BoardDeleteLog` con `deleted_at > since` que este usuario podía ver |
 | 1 query de folders | Solo carpetas de los tableros cambiados |
 | 1 query de items | Solo ítems de los tableros cambiados |
 
@@ -590,7 +590,7 @@ antes de obtener los medios.
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `boards` | `FullBoard[]` | Tableros nuevos/cambiados con todas las carpetas e ítems. En sync completa, contiene todos los tableros accesibles. En sync delta, solo tableros con `updated_at > since`. |
-| `deleted_board_ids` | `int[]` | IDs de tableros borrados permanentemente desde `since`. Siempre `[]` en sync completa. El cliente debe eliminarlos del almacenamiento local. |
+| `deleted_board_ids` | `int[]` | IDs de tableros borrados desde `since` que este usuario podía ver (propios, guardados, de colaborador o públicos de su línea). Siempre `[]` en sync completa. El cliente debe eliminarlos del almacenamiento local. |
 | `synced_at` | `string` | Timestamp UTC ISO 8601. **Guarda este valor y pásalo como `since` en la siguiente llamada de sync.** |
 | `is_full_sync` | `bool` | `true` en sync completa (el cliente sustituye todos los tableros locales). `false` en delta (el cliente hace upsert de `boards` y elimina `deleted_board_ids`). |
 
@@ -692,8 +692,8 @@ tablero pasado a privado, entrada quitada de la biblioteca). Esos tableros perma
 almacenamiento local hasta una sync completa. Programa una sync completa al pasar la app a primer
 plano tras un periodo prolongado de inactividad para purgar entradas obsoletas.
 
-Los tableros públicos creados por otros usuarios nunca reciben notificación push individual (el
-fan-out a todos los usuarios autenticados no escala). Aparecen en la siguiente sync completa.
+Los tableros públicos creados por otros usuarios de la línea del visor nunca reciben notificación
+push individual. Aparecen en la siguiente sync completa.
 
 ---
 
@@ -705,7 +705,7 @@ de Fam Plus:
 1. **Owned** — tableros creados por el usuario
 2. **Library** — tableros guardados vía `BoardLibraryEntry`
 3. **Collaborated** — tableros donde el usuario es `BoardCollaborator`
-4. **Public** — tableros con `is_public = True`, visibles para todos los usuarios autenticados
+4. **Public** — tableros con `is_public = True` cuyo dueño está en la línea del visor (`get_visible_creator_ids`). Un Líder Pro no recibe los tableros públicos de un Líder Pro por encima, y alguien de otra línea o por encima del dueño tampoco los recibe.
 
 Las flags `is_owner`, `is_library`, `is_collaborator` e `is_public` reflejan todas las categorías
 aplicables a cada tablero.
@@ -897,4 +897,4 @@ apps/boards/
                        # dispatch FCM tasks; collaborator/library entry hooks
 ```
 
-Los boards con `is_client_area=True` se omiten de `_get_accessible_board_ids` y no se sincronizan con el teclado móvil.
+Los boards con `is_client_area=True` se omiten de `get_accessible_board_ids` y no se sincronizan con el teclado móvil, ni siquiera para su dueño. `GET /boards/<id>/` responde 404.

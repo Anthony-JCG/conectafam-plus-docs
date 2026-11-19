@@ -30,7 +30,7 @@ Relación con las apps núcleo:
 | `BoardItem` | Elemento del mosaico. Tipos: `text`, `image`, `link`, `video`, `voice`, `pdf`, `youtube`, `page`, `academy` (solo en la Videoteca del área de clientes, ver abajo). Archivos hasta 10 MB. FK opcional → `landing.LandingPage`; `unlock_day` (disponibilidad en la academia, `0` = siempre) |
 | `BoardCollaborator` | Usuario invitado. Los colaboradores PRO+ tienen acceso de lectura y edición; los colaboradores Basic son de solo lectura. Único en `(board, user)` |
 | `BoardLibraryEntry` | Referencia a un tablero compartido guardado en la biblioteca propia (solo lectura) |
-| `BoardDeleteLog` | Registro append-only de tableros eliminados de forma permanente. `board_id` / `user_id` son enteros simples porque la fila `Board` ya no existe. Lo consume **solo** el endpoint de delta-sync de la keyboard API para que los clientes móviles sepan qué purgar |
+| `BoardDeleteLog` | Registro append-only de tableros eliminados de forma permanente. `board_id` / `user_id` son enteros simples porque la fila `Board` ya no existe. También guarda `is_public` y `audience_user_ids` para avisar solo a quien podía ver el tablero. Lo consume **solo** el endpoint de delta-sync de la keyboard API para que los clientes móviles sepan qué purgar |
 
 ### Boards del área de clientes
 
@@ -159,7 +159,7 @@ Todo está en `services/board_permissions.py`; el derecho sale de `user_levels`
 
 En la configuración solo se editan título, descripción y portada, y estos boards no se pueden
 borrar desde la interfaz (`delete_board` / `save_board` los descartan). El flag además los deja
-fuera de la sincronización del teclado (`_get_accessible_board_ids`) y de los límites de creación y
+fuera de la sincronización del teclado (`get_accessible_board_ids`, también para el dueño) y de los límites de creación y
 el exceso de objetos de `BOARDS_MODEL_KEY`.
 
 #### Migraciones
