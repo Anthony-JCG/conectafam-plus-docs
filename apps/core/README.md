@@ -49,7 +49,7 @@ Domain constants shared across apps live in `const.py`:
 | `redis_bd.py` | `redis_get/set/delete_key/delete_pattern`, `acquire_processing_flag`, `release_processing_flag`, `processing_flag_exists` |
 | `notifications.py` | `push_notification`, `notify_downline`, `send_personal_notification`, subscription registry |
 | `web_fcm.py` | `send_web_push_to_token`, `is_web_fcm_ready` — Firebase Cloud Messaging delivery |
-| `fcm_errors.py` | Classifies FCM failures: stale token (only `Unregistered` or a clear invalid-token message), transient (retry), or other (token kept, error logged); `fcm_retry_countdown` backoff |
+| `fcm_errors.py` | Classifies FCM failures: stale token (`Unregistered`, or `INVALID_ARGUMENT` whose FCM body names the registration token), transient (retry), or other (token kept, error logged); `fcm_retry_countdown` backoff |
 | `fcm_observability.py` | `report_fcm_event` — forwards FCM anomalies to Sentry |
 | `htmx.py` | `attach_toast_trigger(response, message)` and `htmx_error_response(msg, status=422)` — the HTMX response contract used across the project |
 | `pdf_preview.py` | `pdf_first_page_to_webp_bytes`, `store_pdf_preview_bytes`, `clear_pdf_preview` (PyMuPDF) |
