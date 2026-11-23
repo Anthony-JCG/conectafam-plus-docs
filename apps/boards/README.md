@@ -64,9 +64,9 @@ user's own client-area board, and the view merges both:
 - `board_detail` on the catalog redirects an advisor to their own board (same folder and query
   string, e.g. `open_item` from search). The search index lists catalog folders and items as
   read-only tiles, but no catalog board entry.
-- `mosaic.js` doesn't drag or select read-only tiles (the client-area picker still selects them)
-  and leaves them out of the reorder payload; `item-viewer.js` hides edit, move and delete for
-  them.
+- `mosaic.js` doesn't drag read-only tiles and leaves them out of the reorder payload; it only
+  selects the read-only items, to copy them (the client-area picker selects any); `item-viewer.js`
+  hides edit, move and delete for them.
 
 #### Root lock
 
@@ -87,6 +87,18 @@ them (or their subfolders).
 
 Own top-level folders created before this rule are no longer valid; migration `0012` moves loose
 root content into Otros.
+
+#### Fixed folders
+
+The client area finds the four catalog folders by title, so nobody, root included, can rename,
+move or delete them.
+
+- `is_client_area_system_folder(folder)` identifies them: catalog root and a title from
+  `CLIENT_AREA_CATALOG_FOLDER_TITLES`.
+- Server: `save_board_folder` (rename), `delete_board_folder` and bulk delete or move answer
+  `CLIENT_AREA_SYSTEM_FOLDER_MESSAGE`.
+- UI: on root's view `build_view_mosaic_tiles` marks them `read_only` (not selectable or
+  draggable) and `is_catalog_folder` hides rename and delete inside them.
 
 #### Videoteca templates
 
@@ -125,17 +137,37 @@ read-only (no rename or delete: `is_catalog_folder` hides those actions).
   catalog folders). Opening one by id shows its catalog folder, move options label it with the
   catalog title, and the search index lists its items (URL `board_folder(own, shadow)`) without a
   folder entry of its own.
-- If root deletes the catalog folder, `SET_NULL` turns the shadow into a regular folder, so nothing
+- If root deletes a catalog subfolder, `SET_NULL` turns the shadow into a regular folder, so nothing
   is lost.
 
-Writes stay scoped to the board in the URL: save, delete, move, reorder and bulk actions look items
-and folders up with `board=board`, so a catalog item id sent through the own board is a 404 or is
-ignored. Items never move between the two boards.
+Writes stay scoped to the board in the URL: save, delete, move and reorder look items and folders
+up with `board=board`, so a catalog item id sent through the own board is a 404 or is rejected.
+Items never move between the two boards; copying is the only action that reads the catalog (see
+below).
 
 Two boards behind one view, rather than an owner per item, because every board service (mosaic
 cache, search index, `board_item_file`, bulk operations, reorder) is scoped by board: a private
 board reuses the whole item CRUD with one nullable FK and no per-item ownership checks, and merging
 only happens when reading.
+
+#### Copy and move
+
+Copy and move, single or bulk, never leave the client-area board: the destination picker only
+offers that board (`build_board_detail_context` sets `destination_boards = [board]` and
+`can_duplicate = can_edit`).
+
+- Copy: any item of the view, own or catalog. `duplicate_board_item` and `bulk_duplicate_board`
+  take the source through `get_view_item` / `view_board_ids`, ignore any posted target board and
+  resolve the folder with `find_write_folder`: an advisor's copy lands on their own board (in the
+  shadow of the chosen catalog folder) and root's on the catalog. The root stays locked and the
+  copy keeps `unlock_day`.
+- Move: own content only. `move_board_item` looks up with `board=board` and bulk move rejects a
+  selection that includes anything from another board.
+- UI: no ownership marks, options are just shown or hidden. On a read-only tile `item-viewer.js`
+  only offers "Duplicar"; in selection mode `board-detail.js` hides Move and Delete when any
+  read-only item is selected.
+- `CLIENT_AREA_BOARD_WRITE_ROUTES` includes the duplicate routes, so a Basic user with the add-on
+  also copies within their board.
 
 #### Permissions
 
@@ -172,6 +204,12 @@ excess-object counts.
 apply cleanly after them on a fresh database. Both skip with a warning when `USER_ROOT` (or the
 catalog board) doesn't exist yet; `seed_client_area_board` creates it later. `0010` fails if the
 static cover is missing.
+
+`seed_client_area_board` also restores any missing catalog root folder, empty, and
+`client_area_catalog.relink_orphan_shadow_folders` links back the shadow folders left loose at the
+root of an advisor's board. It only links a folder with exactly the same title that is the only
+one with that title on its board, when the board has no shadow of that folder yet; anything else
+stays as it is.
 
 ### Access logic
 

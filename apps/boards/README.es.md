@@ -65,9 +65,9 @@ cuando `board` es el board propio del usuario, y la vista junta los dos:
 - `board_detail` sobre el catálogo redirige al asesor a su board (misma carpeta y misma query, p. ej.
   `open_item` desde la búsqueda). El índice de búsqueda incluye carpetas y elementos del catálogo
   como fichas de solo lectura, pero no una entrada del board catálogo.
-- `mosaic.js` no deja arrastrar ni seleccionar fichas de solo lectura (el selector del área de
-  clientes sí las elige) y no las manda al reordenar; `item-viewer.js` les oculta editar, mover y
-  borrar.
+- `mosaic.js` no deja arrastrar fichas de solo lectura ni las manda al reordenar, y solo deja
+  seleccionar las que son elementos para copiarlos (el selector del área de clientes elige
+  cualquiera); `item-viewer.js` les oculta editar, mover y borrar.
 
 #### Raíz bloqueada
 
@@ -89,6 +89,18 @@ de ellas (o de sus subcarpetas).
 
 Las carpetas propias de primer nivel creadas antes de esta regla ya no son válidas; la migración
 `0012` mueve a Otros lo que hubiera suelto en la raíz.
+
+#### Carpetas fijas
+
+El área de clientes localiza las cuatro carpetas del catálogo por su título, así que nadie, ni
+siquiera root, puede renombrarlas, moverlas ni borrarlas.
+
+- `is_client_area_system_folder(folder)` las identifica: raíz del catálogo y título de
+  `CLIENT_AREA_CATALOG_FOLDER_TITLES`.
+- Servidor: `save_board_folder` (renombrar), `delete_board_folder` y el borrado o movimiento
+  múltiple responden `CLIENT_AREA_SYSTEM_FOLDER_MESSAGE`.
+- UI: en la vista de root, `build_view_mosaic_tiles` las marca `read_only` (no se seleccionan ni se
+  arrastran) y `is_catalog_folder` oculta renombrar y borrar dentro de ellas.
 
 #### Plantillas de Videoteca
 
@@ -129,17 +141,36 @@ acciones).
   muestra las carpetas del catálogo). Si se abre una por su id se ve su carpeta del catálogo, en las
   opciones de mover aparece con el título del catálogo, y el índice de búsqueda incluye sus
   elementos (URL `board_folder(propio, sombra)`) sin una entrada de carpeta aparte.
-- Si root borra la carpeta del catálogo, `SET_NULL` deja la sombra como carpeta normal y no se
+- Si root borra una subcarpeta del catálogo, `SET_NULL` deja la sombra como carpeta normal y no se
   pierde nada.
 
-Las escrituras siguen atadas al board de la URL: guardar, borrar, mover, reordenar y las acciones
-múltiples buscan con `board=board`, de modo que un id de elemento del catálogo enviado por el board
-propio da 404 o se ignora. Nada se mueve de un board a otro.
+Las escrituras siguen atadas al board de la URL: guardar, borrar, mover y reordenar buscan con
+`board=board`, de modo que un id de elemento del catálogo enviado por el board propio da 404 o se
+rechaza. Nada se mueve de un board a otro; copiar es lo único que lee del catálogo (ver abajo).
 
 ¿Por qué dos boards detrás de una sola vista y no un dueño por elemento? Todo en boards va por board
 (caché del mosaico, índice de búsqueda, `board_item_file`, operaciones múltiples, reordenado). Con un
 board privado se aprovecha todo el CRUD con un solo FK opcional y sin comprobar el dueño elemento a
 elemento; la mezcla solo ocurre al leer.
+
+#### Copiar y mover
+
+Copiar y mover, de uno en uno o en bloque, nunca salen del board del área de clientes: el selector
+de destino solo ofrece ese board (`build_board_detail_context` pone `destination_boards = [board]`
+y `can_duplicate = can_edit`).
+
+- Copiar: cualquier elemento de la vista, propio o del catálogo. `duplicate_board_item` y
+  `bulk_duplicate_board` toman el origen con `get_view_item` / `view_board_ids`, no hacen caso del
+  board destino que llegue y resuelven la carpeta con `find_write_folder`: la copia de un asesor
+  queda en su board (en la sombra de la carpeta del catálogo elegida) y la de root, en el catálogo.
+  La raíz sigue bloqueada y la copia conserva `unlock_day`.
+- Mover: solo lo propio. `move_board_item` busca con `board=board` y el movimiento múltiple rechaza
+  la selección si incluye algo de otro board.
+- UI: sin marcas de propiedad, solo se muestran u ocultan opciones. En una ficha de solo lectura
+  `item-viewer.js` deja solo "Duplicar"; en modo selección, si hay algún elemento de solo lectura,
+  `board-detail.js` oculta Mover y Eliminar.
+- `CLIENT_AREA_BOARD_WRITE_ROUTES` incluye las rutas de duplicar, así que un Basic con el add-on
+  también copia dentro de su board.
 
 #### Permisos
 
@@ -176,6 +207,12 @@ el exceso de objetos de `BOARDS_MODEL_KEY`.
 esquema posteriores se aplican sin problema detrás de ellas en una base de datos nueva. Las dos se
 saltan con un aviso si todavía no existe `USER_ROOT` (o el board catálogo); `seed_client_area_board`
 lo crea después. `0010` falla si no encuentra la portada estática.
+
+`seed_client_area_board` también restaura, vacías, las carpetas raíz del catálogo que falten, y
+`client_area_catalog.relink_orphan_shadow_folders` vuelve a enlazar con ellas las carpetas sombra que
+quedaron sueltas en la raíz del board de un asesor. Solo enlaza la que tiene exactamente el mismo
+título, es la única con ese título en su board y no hay ya otra sombra de esa carpeta; lo demás se
+queda como está.
 
 ### Lógica de acceso
 
