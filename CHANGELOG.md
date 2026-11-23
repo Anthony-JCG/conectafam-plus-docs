@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.3.4](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.3.3...v7.3.4) (2026-11-23)
+
+
+### Bug Fixes
+
+* **boards:** protect client-area board structure ([#382](https://github.com/Anthony-JCG/conectafam-plus/issues/382)) ([d500278](https://github.com/Anthony-JCG/conectafam-plus/commit/d500278bc50ab16f4f0f6ba033b103abca161ac4))
+* **fcm:** detect invalid tokens from fcm response ([#380](https://github.com/Anthony-JCG/conectafam-plus/issues/380)) ([fd5fbbd](https://github.com/Anthony-JCG/conectafam-plus/commit/fd5fbbd8998269facab5081bfa654bb73b590fe4))
+
 ## [7.3.3](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.3.2...v7.3.3) (2026-11-19)
 
 
