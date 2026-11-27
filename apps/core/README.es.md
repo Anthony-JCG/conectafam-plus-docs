@@ -51,7 +51,7 @@ Las constantes de dominio compartidas entre apps viven en `const.py`:
 | `redis_bd.py` | `redis_get/set/delete_key/delete_pattern`, `acquire_processing_flag`, `release_processing_flag`, `processing_flag_exists` |
 | `notifications.py` | `push_notification`, `notify_downline`, `send_personal_notification`, registro de suscripciones |
 | `web_fcm.py` | `send_web_push_to_token`, `is_web_fcm_ready` — entrega por Firebase Cloud Messaging |
-| `fcm_errors.py` | Clasifica fallos FCM: token obsoleto (`Unregistered`, o `INVALID_ARGUMENT` cuyo cuerpo FCM nombra el registration token), transitorio (reintento) u otro (token conservado, error registrado); backoff `fcm_retry_countdown` |
+| `fcm_errors.py` | Clasifica fallos FCM: token obsoleto (`Unregistered`, o `INVALID_ARGUMENT` cuyo cuerpo nombra el registration token — mensaje principal, `LocalizedMessage` o `message.token`), transitorio (reintento) u otro (token conservado; el log incluye status y message de FCM); backoff `fcm_retry_countdown` |
 | `fcm_observability.py` | `report_fcm_event` — reenvía anomalías FCM a Sentry |
 | `htmx.py` | `attach_toast_trigger(response, message)` y `htmx_error_response(msg, status=422)` — el contrato de respuesta HTMX usado en todo el proyecto |
 | `pdf_preview.py` | `pdf_first_page_to_webp_bytes`, `store_pdf_preview_bytes`, `clear_pdf_preview` (PyMuPDF) |
