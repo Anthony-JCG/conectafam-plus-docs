@@ -1,5 +1,13 @@
 # Changelog
 
+## [7.3.5](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.3.4...v7.3.5) (2026-11-27)
+
+
+### Bug Fixes
+
+* **communication:** load pdf viewer before client tools ([#383](https://github.com/Anthony-JCG/conectafam-plus/issues/383)) ([c813496](https://github.com/Anthony-JCG/conectafam-plus/commit/c813496a893a04db9fc9cce82c6d90beaf90d934))
+* **fcm:** discard tokens named in fcm details ([#385](https://github.com/Anthony-JCG/conectafam-plus/issues/385)) ([99bb635](https://github.com/Anthony-JCG/conectafam-plus/commit/99bb63545156e2e6c59482290b371f98dac0da60))
+
 ## [7.3.4](https://github.com/Anthony-JCG/conectafam-plus/compare/v7.3.3...v7.3.4) (2026-11-23)
 
 
